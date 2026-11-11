@@ -53,8 +53,8 @@
 
 ### Documentation & Verification
 
-- [ ] **DOC-01**: Provides complete `youtube-quick-controls/README.md` (and root `README.md`) documenting features, Chrome Load Unpacked instructions, fullscreen DOM injection architecture, and known YouTube quality API limitations.
-- [ ] **VER-01**: Verified end-to-end with automated unit & DOM integration tests (watch, fullscreen Delhi & classic, Shorts, speed/quality sync & failure rollback, SPA navigation, theme adaptation, popup/storage) AND real Chromium extension loading check with 100% passing suite after final edit.
+- [x] **DOC-01**: Provides complete `youtube-quick-controls/README.md` (and root `README.md`) documenting features, Chrome Load Unpacked instructions, fullscreen DOM injection architecture, and known YouTube quality API limitations.
+- [x] **VER-01**: Verified end-to-end with automated unit & DOM integration tests (watch, fullscreen Delhi & classic, Shorts, speed/quality sync & failure rollback, SPA navigation, theme adaptation, popup/storage) AND real Chromium extension loading check with 100% passing suite after final edit.
 
 ## Out of Scope
 
@@ -69,23 +69,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01..05 | Phase 1 | Pending |
-| SET-01..02 | Phase 1 | Pending |
-| SPEED-01..05 | Phase 2 | Pending |
-| QUAL-01..05 | Phase 2 | Pending |
-| UI-01..05 | Phase 2 | Pending |
-| FULL-01..03 | Phase 3 | Pending |
-| SHORTS-01 | Phase 3 | Pending |
-| SPA-01 | Phase 3 | Pending |
-| SET-03 | Phase 3 | Pending |
-| DOC-01 | Phase 4 | Pending |
-| VER-01 | Phase 4 | Pending |
+| FOUND-01..05 | Phase 1 | Complete |
+| SET-01..02 | Phase 1 | Complete |
+| SPEED-01..05 | Phase 2 | Complete |
+| QUAL-01..05 | Phase 2 | Complete |
+| UI-01..05 | Phase 2 | Complete |
+| FULL-01..03 | Phase 3 | Complete |
+| SHORTS-01 | Phase 3 | Complete |
+| SPA-01 | Phase 3 | Complete |
+| SET-03 | Phase 3 | Complete |
+| DOC-01 | Phase 4 | Complete |
+| VER-01 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 30 total
 - Mapped to phases: 30
+- Complete: 30
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-11-11*
-*Last updated: 2026-11-11 after research synthesis*
+*Last updated: 2026-11-11 after Phase 4 completion*
