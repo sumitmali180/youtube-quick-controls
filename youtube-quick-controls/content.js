@@ -185,7 +185,9 @@
     clearPending() {
       for (const [, entry] of this.pending.entries()) {
         clearTimeout(entry.timer);
-        entry.reject(new Error('Bridge request aborted on navigation'));
+        const err = new Error('Bridge request aborted on navigation');
+        err.isNavigationAbort = true;
+        entry.reject(err);
       }
       this.pending.clear();
     }
@@ -195,6 +197,28 @@
       window.removeEventListener('message', this.boundOnMessage);
       this.eventListeners.clear();
     }
+  }
+
+  function isDislikeElement(el) {
+    if (!el) return false;
+    const label = (el.getAttribute?.('aria-label') || '').toLowerCase();
+    if (label.includes('dislike')) return true;
+    return Boolean(el.closest?.('dislike-button-view-model, ytd-toggle-button-renderer#dislike-button, #dislike-button'));
+  }
+
+  function queryFirstLike(root, selectors) {
+    if (!root || typeof root.querySelectorAll !== 'function') {
+      return null;
+    }
+    for (const selector of selectors) {
+      const matches = root.querySelectorAll(selector);
+      for (const candidate of matches) {
+        if (candidate && candidate.isConnected && !isDislikeElement(candidate)) {
+          return candidate;
+        }
+      }
+    }
+    return null;
   }
 
   function createCaretSvg() {
@@ -224,18 +248,24 @@
       this.mode = 'watch';
       this.hostEl = null;
       this.controlsAbort = null;
+      this.lifecycleAbort = null;
       this.videoEl = null;
       this.videoAbort = null;
       this.observer = null;
       this.resizeObserver = null;
       this.anchorColumnEl = null;
+      this.activeAnchor = null;
       this.debounceTimer = null;
+      this.keepaliveTimer = null;
       this.qualityPollTimers = [];
       this.tooltipTimer = null;
       this.isInternalRateChange = false;
       this.isQualitySwitching = false;
+      this.manualSpeedOverride = false;
+      this.manualQualityOverride = false;
       this.openDropdownName = null;
       this.lastVideoKey = null;
+      this.lastUrlHref = typeof location === 'object' ? location.href : '';
       this.appliedDefaultsForKey = null;
 
       this.qualityState = {
@@ -275,17 +305,116 @@
     }
 
     setupLifecycleObservers() {
-      // Phase 3 expands fullscreen/Shorts/SPA orchestration; watch observer works standalone here.
-      window.addEventListener('yt-navigate-finish', () => this.refreshContext({ applyDefaultsIfNew: true }));
-      window.addEventListener('yt-page-data-updated', () => this.refreshContext({ applyDefaultsIfNew: false }));
+      if (this.lifecycleAbort) {
+        this.lifecycleAbort.abort();
+      }
+      this.lifecycleAbort = new AbortController();
+      const { signal } = this.lifecycleAbort;
+
+      window.addEventListener(
+        'yt-navigate-start',
+        () => {
+          this.handleNavigationStart();
+        },
+        { signal }
+      );
+
+      window.addEventListener(
+        'yt-navigate-finish',
+        () => {
+          this.refreshContext({ applyDefaultsIfNew: true });
+        },
+        { signal }
+      );
+
+      window.addEventListener(
+        'yt-page-data-updated',
+        () => {
+          this.refreshContext({ applyDefaultsIfNew: false });
+        },
+        { signal }
+      );
+
+      window.addEventListener(
+        'popstate',
+        () => {
+          this.refreshContext({ applyDefaultsIfNew: true });
+        },
+        { signal }
+      );
+
+      const handleFsChange = () => {
+        this.handleFullscreenTransition();
+      };
+      document.addEventListener('fullscreenchange', handleFsChange, { signal });
+      document.addEventListener('webkitfullscreenchange', handleFsChange, { signal });
+
+      window.addEventListener(
+        'resize',
+        () => {
+          if (this.hostEl?.isConnected && this.activeAnchor) {
+            this.alignHostWithAnchor(this.hostEl, this.activeAnchor);
+          }
+          if (this.openDropdownName && this.ui?.[this.openDropdownName]) {
+            const ctrl = this.ui[this.openDropdownName];
+            this.positionDropdownFallback(ctrl.trigger, ctrl.dropdown);
+          }
+        },
+        { signal }
+      );
 
       this.observer = new MutationObserver(() => {
+        if (typeof location === 'object' && location.href !== this.lastUrlHref) {
+          this.lastUrlHref = location.href;
+          clearTimeout(this.debounceTimer);
+          this.debounceTimer = setTimeout(() => {
+            this.refreshContext({ applyDefaultsIfNew: true });
+          }, 60);
+          return;
+        }
         clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(() => {
+          const prevVideo = this.videoEl;
           this.ensureMounted();
+          if (this.mode === 'shorts' && this.videoEl && this.videoEl !== prevVideo) {
+            this.manualSpeedOverride = false;
+            this.manualQualityOverride = false;
+            this.appliedDefaultsForKey = null;
+            void this.fetchAndUpdateQualityState({ tryApplyDefaults: true });
+          }
         }, 80);
       });
-      this.observer.observe(document.documentElement, { childList: true, subtree: true });
+
+      const observeRoot = document.querySelector('ytd-app') || document.body || document.documentElement;
+      this.observer.observe(observeRoot, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['is-active']
+      });
+    }
+
+    handleNavigationStart() {
+      this.closeAllDropdowns({ returnFocus: false });
+      this.clearQualityTimers();
+      this.bridge.clearPending();
+      this.isQualitySwitching = false;
+      this.manualSpeedOverride = false;
+      this.manualQualityOverride = false;
+    }
+
+    handleFullscreenTransition() {
+      this.closeAllDropdowns({ returnFocus: false });
+      this.stopFullscreenKeepalive();
+      this.ensureMounted();
+      // YouTube may render .ytp-fullscreen-quick-actions slightly asynchronously after fullscreenchange
+      for (const delay of [60, 260]) {
+        setTimeout(() => {
+          if (this.lifecycleAbort?.signal.aborted) return;
+          this.ensureMounted();
+        }, delay);
+      }
+      void this.fetchAndUpdateQualityState({ tryApplyDefaults: false });
     }
 
     detectMode() {
@@ -359,6 +488,7 @@
         'ratechange',
         () => {
           if (this.isInternalRateChange) return;
+          this.manualSpeedOverride = true;
           this.syncSpeedUi(this.videoEl.playbackRate);
         },
         { signal }
@@ -368,6 +498,23 @@
         'loadedmetadata',
         () => {
           void this.fetchAndUpdateQualityState({ tryApplyDefaults: true });
+        },
+        { signal }
+      );
+
+      this.videoEl.addEventListener(
+        'playing',
+        () => {
+          const settings = this.settingsStore.settings;
+          if (
+            settings.enabled &&
+            settings.autoApply &&
+            !this.manualSpeedOverride &&
+            settings.defaultSpeed !== 1.0 &&
+            Math.abs((this.videoEl?.playbackRate || 1.0) - settings.defaultSpeed) > 0.01
+          ) {
+            this.applyPlaybackSpeed(settings.defaultSpeed, { markManual: false });
+          }
         },
         { signal }
       );
@@ -384,28 +531,23 @@
         'ytd-watch-metadata #actions ytd-segmented-like-dislike-button-renderer',
         'ytd-watch-metadata #actions like-button-view-model',
         'ytd-watch-metadata #top-level-buttons-computed segmented-like-dislike-button-view-model',
+        'ytd-watch-metadata #top-level-buttons-computed ytd-toggle-button-renderer:first-child',
         'ytd-watch-metadata #top-level-buttons-computed button[aria-label*="like" i]',
         '#above-the-fold #top-level-buttons-computed button[aria-label*="like" i]',
         'ytd-watch-metadata #top-level-buttons-computed',
         '#above-the-fold #actions'
       ];
 
-      let likeEl = null;
-      for (const selector of likeSelectors) {
-        const candidate = document.querySelector(selector);
-        if (candidate && candidate.isConnected) {
-          likeEl = candidate;
-          break;
-        }
-      }
-
+      const likeEl = queryFirstLike(document, likeSelectors);
       if (!likeEl) {
         return null;
       }
 
       const actionsInner = likeEl.closest('#actions-inner');
       const actionsContainer = likeEl.closest('#actions');
-      const mountParent = actionsInner || actionsContainer || likeEl.parentElement;
+      const menuRenderer = likeEl.closest('ytd-menu-renderer');
+      const mountParent =
+        actionsInner || actionsContainer || menuRenderer?.parentElement || likeEl.parentElement;
       if (!mountParent) {
         return null;
       }
@@ -414,7 +556,7 @@
         ? actionsInner.querySelector('ytd-menu-renderer') || actionsInner.firstElementChild
         : actionsContainer
           ? actionsContainer.querySelector('#actions-inner, ytd-menu-renderer') || actionsContainer.firstElementChild
-          : likeEl;
+          : menuRenderer || likeEl;
 
       return {
         mode: 'watch',
@@ -424,27 +566,189 @@
       };
     }
 
+    /**
+     * Find Fullscreen anchor inside document.fullscreenElement so controls remain
+     * inside the browser Top Layer, directly above the fullscreen Like button or
+     * cleanly above .ytp-chrome-controls when in classic fullscreen layout.
+     */
+    findFullscreenAnchor() {
+      const fsRoot = document.fullscreenElement;
+      if (!fsRoot) {
+        return null;
+      }
+
+      const fsPlayer = fsRoot.matches?.('#movie_player, .html5-video-player')
+        ? fsRoot
+        : fsRoot.querySelector?.('#movie_player, .html5-video-player') || fsRoot;
+
+      const fsLikeSelectors = [
+        '.ytp-fullscreen-quick-actions segmented-like-dislike-button-view-model',
+        '.ytp-fullscreen-quick-actions like-button-view-model',
+        '.ytp-fullscreen-quick-actions ytd-toggle-button-renderer',
+        '.ytp-fullscreen-quick-actions button[aria-label*="like" i]',
+        '.ytp-fullscreen-quick-actions button:first-of-type'
+      ];
+
+      const likeEl = queryFirstLike(fsRoot, fsLikeSelectors);
+      if (likeEl) {
+        try {
+          const likeRect = likeEl.getBoundingClientRect();
+          const playerRect = fsPlayer.getBoundingClientRect();
+          if (likeRect.height > 0 && playerRect.height > 0) {
+            return {
+              mode: 'fullscreen',
+              fsPlacement: 'above-like',
+              mountParent: fsPlayer,
+              referenceNode: null,
+              likeEl,
+              fsPlayer
+            };
+          }
+        } catch {
+          // Fall through to inline quick-actions placement when rects are unavailable.
+        }
+
+        const quickActions =
+          likeEl.closest('.ytp-overlay-bottom-right') ||
+          likeEl.closest('.ytp-fullscreen-quick-actions') ||
+          likeEl.parentElement;
+        if (quickActions) {
+          const wrapper =
+            likeEl.closest('segmented-like-dislike-button-view-model, like-button-view-model, button-view-model') ||
+            likeEl;
+          return {
+            mode: 'fullscreen',
+            fsPlacement: 'quick-actions-inline',
+            mountParent: quickActions,
+            referenceNode: wrapper === this.hostEl ? wrapper.nextElementSibling : wrapper,
+            likeEl,
+            fsPlayer
+          };
+        }
+      }
+
+      // Classic fullscreen fallback: anchored cleanly above bottom controls inside fullscreen Top Layer
+      const chromeBottom = fsPlayer.querySelector('.ytp-chrome-bottom');
+      return {
+        mode: 'fullscreen',
+        fsPlacement: 'classic-overlay',
+        mountParent: fsPlayer,
+        referenceNode: chromeBottom === this.hostEl ? null : chromeBottom,
+        likeEl: null,
+        fsPlayer
+      };
+    }
+
+    /**
+     * Find active Shorts reel Like button strictly inside ytd-reel-video-renderer[is-active].
+     */
+    findShortsAnchor() {
+      const activeReel =
+        document.querySelector('ytd-reel-video-renderer[is-active]') ||
+        document.getElementById('shorts-player')?.closest('ytd-reel-video-renderer');
+      if (!activeReel || !activeReel.isConnected) {
+        return null;
+      }
+
+      const shortsLikeSelectors = [
+        'ytd-reel-player-overlay-renderer #actions #like-button',
+        '#actions #like-button',
+        'ytd-like-button-renderer',
+        'like-button-view-model',
+        'button[aria-label*="like" i]',
+        '#actions'
+      ];
+
+      const likeEl = queryFirstLike(activeReel, shortsLikeSelectors);
+      if (!likeEl) {
+        return null;
+      }
+
+      const actionsCol = likeEl.closest('#actions') || likeEl.parentElement;
+      if (!actionsCol) {
+        return null;
+      }
+
+      const likeNode =
+        likeEl.closest('#like-button, ytd-like-button-renderer, like-button-view-model') || likeEl;
+      return {
+        mode: 'shorts',
+        mountParent: actionsCol,
+        referenceNode: likeNode === this.hostEl ? likeNode.nextElementSibling : likeNode,
+        likeEl: likeNode
+      };
+    }
+
     resolveAnchor(mode = this.mode) {
+      if (mode === 'fullscreen') {
+        return this.findFullscreenAnchor();
+      }
+      if (mode === 'shorts') {
+        return this.findShortsAnchor();
+      }
       if (mode === 'watch') {
         return this.findWatchAnchor();
       }
       return null;
     }
 
-    alignHostWithLikeButton(host, anchor) {
-      if (!host || !anchor || !anchor.likeEl || anchor.mode !== 'watch') {
+    alignHostWithAnchor(host, anchor) {
+      if (!host || !anchor) {
         return;
       }
-      try {
-        const likeRect = anchor.likeEl.getBoundingClientRect();
-        const parentRect = anchor.mountParent.getBoundingClientRect();
-        if (likeRect.width > 0 && parentRect.width > 0) {
-          const offset = Math.max(0, Math.round(likeRect.left - parentRect.left));
-          host.style.marginInlineStart = offset > 0 && offset < parentRect.width ? `${offset}px` : '0px';
-        }
-      } catch {
-        host.style.marginInlineStart = '0px';
+
+      host.dataset.yqcMode = anchor.mode;
+      if (anchor.fsPlacement) {
+        host.dataset.yqcFsPlacement = anchor.fsPlacement;
+      } else {
+        delete host.dataset.yqcFsPlacement;
       }
+
+      host.classList.toggle(
+        'yqc-fullscreen-overlay-slot',
+        anchor.mode === 'fullscreen' && anchor.fsPlacement === 'classic-overlay'
+      );
+
+      if (anchor.mode === 'watch' && anchor.likeEl) {
+        host.style.left = '';
+        host.style.bottom = '';
+        try {
+          const likeRect = anchor.likeEl.getBoundingClientRect();
+          const parentRect = anchor.mountParent.getBoundingClientRect();
+          if (likeRect.width > 0 && parentRect.width > 0) {
+            const offset = Math.max(0, Math.round(likeRect.left - parentRect.left));
+            host.style.marginInlineStart = offset > 0 && offset < parentRect.width ? `${offset}px` : '0px';
+          }
+        } catch {
+          host.style.marginInlineStart = '0px';
+        }
+        return;
+      }
+
+      if (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'above-like' && anchor.likeEl) {
+        host.style.marginInlineStart = '';
+        try {
+          const likeRect = anchor.likeEl.getBoundingClientRect();
+          const playerRect = anchor.fsPlayer.getBoundingClientRect();
+          const hostWidth = host.offsetWidth || 156;
+          if (likeRect.height > 0 && playerRect.height > 0) {
+            const rawLeft = likeRect.left - playerRect.left;
+            const maxLeft = Math.max(8, playerRect.width - hostWidth - 8);
+            const clampedLeft = Math.max(8, Math.min(Math.round(rawLeft), Math.round(maxLeft)));
+            const rawBottom = playerRect.bottom - likeRect.top + 8;
+            const clampedBottom = Math.max(56, Math.min(Math.round(rawBottom), Math.round(playerRect.height - 48)));
+            host.style.left = `${clampedLeft}px`;
+            host.style.bottom = `${clampedBottom}px`;
+          }
+        } catch {
+          // Leave default overlay fallback coordinates if geometry temporarily unavailable.
+        }
+        return;
+      }
+
+      host.style.marginInlineStart = '';
+      host.style.left = '';
+      host.style.bottom = '';
     }
 
     ensureMounted() {
@@ -461,6 +765,9 @@
 
       const anchor = this.resolveAnchor(this.mode);
       if (!anchor) {
+        if (this.mode === 'other') {
+          this.unmountControls();
+        }
         return false;
       }
 
@@ -472,17 +779,54 @@
       });
 
       if (this.hostEl && this.hostEl.isConnected && this.hostEl.parentElement === anchor.mountParent) {
-        this.hostEl.dataset.yqcMode = anchor.mode;
-        this.alignHostWithLikeButton(this.hostEl, anchor);
-        return true;
+        const prevFsPlacement = this.hostEl.dataset.yqcFsPlacement || null;
+        if (
+          this.hostEl.dataset.yqcMode === anchor.mode &&
+          prevFsPlacement === (anchor.fsPlacement || null)
+        ) {
+          this.activeAnchor = anchor;
+          this.alignHostWithAnchor(this.hostEl, anchor);
+          return true;
+        }
       }
 
       this.buildAndAttachHost(anchor);
       return true;
     }
 
+    startFullscreenKeepalive() {
+      this.stopFullscreenKeepalive();
+      if (this.mode !== 'fullscreen' || !document.fullscreenElement) return;
+      if (this.hostEl) {
+        this.hostEl.dataset.yqcOpen = 'true';
+      }
+      const fsTarget = this.activeAnchor?.fsPlayer || document.fullscreenElement;
+      const pulse = () => {
+        if (!fsTarget || !document.fullscreenElement) return;
+        try {
+          fsTarget.classList?.remove('ytp-autohide');
+          fsTarget.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true }));
+        } catch {
+          // Ignore keepalive pulse errors.
+        }
+      };
+      pulse();
+      this.keepaliveTimer = setInterval(pulse, 900);
+    }
+
+    stopFullscreenKeepalive() {
+      if (this.keepaliveTimer) {
+        clearInterval(this.keepaliveTimer);
+        this.keepaliveTimer = null;
+      }
+      if (this.hostEl && !this.openDropdownName) {
+        delete this.hostEl.dataset.yqcOpen;
+      }
+    }
+
     buildAndAttachHost(anchor) {
       this.unmountControls();
+      this.activeAnchor = anchor;
 
       this.controlsAbort = new AbortController();
       const { signal } = this.controlsAbort;
@@ -491,10 +835,13 @@
       host.id = HOST_ID;
       host.className = 'yqc-root';
       host.dataset.yqcMode = anchor.mode;
+      if (anchor.fsPlacement) {
+        host.dataset.yqcFsPlacement = anchor.fsPlacement;
+      }
       host.setAttribute('role', 'toolbar');
       host.setAttribute('aria-label', 'YouTube Quick Controls');
 
-      if (anchor.mode === 'watch') {
+      if (anchor.mode === 'watch' || (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'quick-actions-inline')) {
         anchor.mountParent.classList.add('yqc-actions-column');
         this.anchorColumnEl = anchor.mountParent;
       }
@@ -510,6 +857,18 @@
           { signal }
         );
       }
+
+      host.addEventListener('pointerenter', () => {
+        if (this.mode === 'fullscreen') {
+          this.startFullscreenKeepalive();
+        }
+      }, { signal });
+
+      host.addEventListener('pointerleave', () => {
+        if (!this.openDropdownName) {
+          this.stopFullscreenKeepalive();
+        }
+      }, { signal });
 
       const speedControl = this.buildDropdownControl('speed', 'Playback speed', '1.0x');
       const qualityControl = this.buildDropdownControl('quality', 'Video quality', 'Auto');
@@ -530,6 +889,8 @@
 
       if (anchor.referenceNode && anchor.referenceNode.parentElement === anchor.mountParent) {
         anchor.mountParent.insertBefore(host, anchor.referenceNode);
+      } else if (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'above-like') {
+        anchor.mountParent.appendChild(host);
       } else {
         anchor.mountParent.prepend(host);
       }
@@ -542,7 +903,7 @@
         tooltipText
       };
 
-      this.alignHostWithLikeButton(host, anchor);
+      this.alignHostWithAnchor(host, anchor);
       this.setupDropdownBehavior('speed', speedControl, signal);
       this.setupDropdownBehavior('quality', qualityControl, signal);
 
@@ -568,13 +929,16 @@
         { signal }
       );
 
-      if (typeof ResizeObserver === 'function' && anchor.likeEl) {
+      if (typeof ResizeObserver === 'function' && (anchor.likeEl || anchor.fsPlayer)) {
         this.resizeObserver = new ResizeObserver(() => {
-          if (this.hostEl?.isConnected) {
-            this.alignHostWithLikeButton(this.hostEl, anchor);
+          if (this.hostEl?.isConnected && this.activeAnchor) {
+            this.alignHostWithAnchor(this.hostEl, this.activeAnchor);
           }
         });
         this.resizeObserver.observe(anchor.mountParent);
+        if (anchor.fsPlayer && anchor.fsPlayer !== anchor.mountParent) {
+          this.resizeObserver.observe(anchor.fsPlayer);
+        }
       }
 
       this.renderSpeedMenu();
@@ -683,6 +1047,9 @@
         }
         this.openDropdownName = name;
         trigger.setAttribute('aria-expanded', 'true');
+        if (this.mode === 'fullscreen') {
+          this.startFullscreenKeepalive();
+        }
         this.positionDropdownFallback(trigger, dropdown);
         if (name === 'quality') {
           void this.fetchAndUpdateQualityState({ tryApplyDefaults: false });
@@ -694,6 +1061,7 @@
           this.openDropdownName = null;
         }
         trigger.setAttribute('aria-expanded', 'false');
+        this.stopFullscreenKeepalive();
       };
 
       if (supportsPopover) {
@@ -923,9 +1291,12 @@
       }
     }
 
-    applyPlaybackSpeed(rate) {
+    applyPlaybackSpeed(rate, { markManual = true } = {}) {
       const targetRate = clampSpeed(rate);
       if (targetRate === null) return false;
+      if (markManual) {
+        this.manualSpeedOverride = true;
+      }
 
       const video = this.findActiveVideo(this.mode) || this.videoEl;
       if (video) {
@@ -1021,7 +1392,7 @@
         item.append(textSpan, checkSpan);
         item.addEventListener('click', (e) => {
           e.stopPropagation();
-          void this.applyVideoQuality(opt.quality);
+          void this.applyVideoQuality(opt.quality, { markManual: true });
           this.closeDropdown('quality', { returnFocus: true });
         });
         control.menuList.appendChild(item);
@@ -1054,9 +1425,12 @@
       }, 3600);
     }
 
-    async applyVideoQuality(targetQuality) {
+    async applyVideoQuality(targetQuality, { markManual = true } = {}) {
       if (this.isQualitySwitching) {
         return false;
+      }
+      if (markManual) {
+        this.manualQualityOverride = true;
       }
 
       const previousState = { ...this.qualityState };
@@ -1088,6 +1462,9 @@
         return false;
       } catch (error) {
         this.isQualitySwitching = false;
+        if (error?.isNavigationAbort) {
+          return false;
+        }
         this.mergePlayerState(previousState);
         this.showTooltip(error?.message || 'Quality change could not be verified.');
         return false;
@@ -1163,23 +1540,26 @@
       if (this.appliedDefaultsForKey === key) return;
       this.appliedDefaultsForKey = key;
 
-      if (settings.defaultSpeed && settings.defaultSpeed !== 1.0) {
-        this.applyPlaybackSpeed(settings.defaultSpeed);
+      if (!this.manualSpeedOverride && settings.defaultSpeed && settings.defaultSpeed !== 1.0) {
+        this.applyPlaybackSpeed(settings.defaultSpeed, { markManual: false });
       }
-      if (settings.defaultQuality && settings.defaultQuality !== 'auto' && this.qualityState.available) {
+      if (!this.manualQualityOverride && settings.defaultQuality && settings.defaultQuality !== 'auto' && this.qualityState.available) {
         const best = this.pickBestAvailableQuality(settings.defaultQuality, this.qualityState);
         if (best && best !== this.qualityState.currentQuality) {
-          await this.applyVideoQuality(best);
+          await this.applyVideoQuality(best, { markManual: false });
         }
       }
     }
 
     refreshContext({ applyDefaultsIfNew = false } = {}) {
+      this.lastUrlHref = typeof location === 'object' ? location.href : '';
       const nextKey = this.getVideoKey();
       if (nextKey !== this.lastVideoKey) {
         this.lastVideoKey = nextKey;
         if (applyDefaultsIfNew) {
           this.appliedDefaultsForKey = null;
+          this.manualSpeedOverride = false;
+          this.manualQualityOverride = false;
         }
       }
       this.ensureMounted();
@@ -1188,6 +1568,7 @@
 
     unmountControls() {
       this.closeAllDropdowns({ returnFocus: false });
+      this.stopFullscreenKeepalive();
       this.clearQualityTimers();
       clearTimeout(this.tooltipTimer);
 
@@ -1208,7 +1589,28 @@
         this.hostEl = null;
       }
       document.querySelectorAll(`#${HOST_ID}`).forEach((el) => el.remove());
+      this.activeAnchor = null;
       this.ui = null;
+    }
+
+    destroy() {
+      this.unmountControls();
+      clearTimeout(this.debounceTimer);
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
+      if (this.lifecycleAbort) {
+        this.lifecycleAbort.abort();
+        this.lifecycleAbort = null;
+      }
+      if (this.videoAbort) {
+        this.videoAbort.abort();
+        this.videoAbort = null;
+      }
+      this.settingsStore.destroy();
+      this.bridge.destroy();
+      globalThis.__yqcContentInitialized = false;
     }
   }
 

@@ -319,16 +319,37 @@ ytd-app[dark] .yqc-root,
   margin-block-end: 6px;
 }
 
+.yqc-root[data-yqc-mode="fullscreen"][data-yqc-fs-placement="above-like"] {
+  position: absolute;
+  margin-block-end: 0;
+  z-index: 2147483640;
+  pointer-events: auto;
+}
+
 .yqc-fullscreen-overlay-slot {
   position: absolute;
   left: 16px;
-  bottom: 62px;
+  bottom: 64px;
   z-index: 2147483640;
   pointer-events: auto;
+}
+
+.html5-video-player.ytp-autohide .yqc-root[data-yqc-mode="fullscreen"]:not([data-yqc-open="true"]):not(:hover):not(:focus-within) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
 }
 
 .yqc-root[data-yqc-mode="shorts"] {
   margin-block-end: 10px;
   flex-wrap: wrap;
   justify-content: center;
+  max-width: 150px;
+}
+
+.yqc-root[data-yqc-mode="shorts"] .yqc-pill {
+  min-height: 28px;
+  min-width: 52px;
+  padding: 0 9px;
+  font-size: 11.5px;
 }

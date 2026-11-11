@@ -39,17 +39,17 @@
 
 ### Fullscreen, Shorts & SPA Lifecycle
 
-- [ ] **FULL-01**: Remains visible, usable, non-overlapping, and consistently styled when entering/exiting fullscreen (`fullscreenchange`, `document.fullscreenElement`).
-- [ ] **FULL-02**: Positions controls directly above the fullscreen Like button inside modern YouTube fullscreen overlay (`.ytp-fullscreen-quick-actions` / Top Layer), and provides a clean non-overlapping classic fullscreen fallback inside `document.fullscreenElement` (`#movie_player` above `.ytp-chrome-controls`).
-- [ ] **FULL-03**: Prevents click-through play/pause toggling, prevents hotkey interception inside open dropdowns, avoids `.ytp-fullscreen-quick-actions` / `.ytp-chrome-bottom` overflow clipping, and keeps player controls alive while interacting with open menus in fullscreen.
-- [ ] **SHORTS-01**: Supports YouTube Shorts (`ytd-reel-video-renderer[is-active]`, `#shorts-player`) by binding to the active reel's `<video>` and anchoring above the active reel's Like button without affecting preloaded off-screen Shorts.
-- [ ] **SPA-01**: Handles YouTube SPA navigation (`yt-navigate-finish`, `yt-page-data-updated`, `popstate`, URL/video changes, back/forward, Watch <-> Shorts <-> Home) with debounced subtree observation, zero duplicate controls, and full `AbortController` / observer cleanup on teardown.
+- [x] **FULL-01**: Remains visible, usable, non-overlapping, and consistently styled when entering/exiting fullscreen (`fullscreenchange`, `document.fullscreenElement`).
+- [x] **FULL-02**: Positions controls directly above the fullscreen Like button inside modern YouTube fullscreen overlay (`.ytp-fullscreen-quick-actions` / Top Layer), and provides a clean non-overlapping classic fullscreen fallback inside `document.fullscreenElement` (`#movie_player` above `.ytp-chrome-controls`).
+- [x] **FULL-03**: Prevents click-through play/pause toggling, prevents hotkey interception inside open dropdowns, avoids `.ytp-fullscreen-quick-actions` / `.ytp-chrome-bottom` overflow clipping, and keeps player controls alive while interacting with open menus in fullscreen.
+- [x] **SHORTS-01**: Supports YouTube Shorts (`ytd-reel-video-renderer[is-active]`, `#shorts-player`) by binding to the active reel's `<video>` and anchoring above the active reel's Like button without affecting preloaded off-screen Shorts.
+- [x] **SPA-01**: Handles YouTube SPA navigation (`yt-navigate-finish`, `yt-page-data-updated`, `popstate`, URL/video changes, back/forward, Watch <-> Shorts <-> Home) with debounced subtree observation, zero duplicate controls, and full `AbortController` / observer cleanup on teardown.
 
 ### Settings, Persistence & Auto-Apply
 
 - [x] **SET-01**: Provides `popup.html`, `popup.css`, and `popup.js` configuring: Enable/Disable controls, Default playback speed, Default video quality, and Auto-apply defaults on new videos.
 - [x] **SET-02**: Persists settings in `chrome.storage.sync` (with `chrome.storage.local` fallback if sync fails) with defaults `{ enabled: true, defaultSpeed: 1.0, defaultQuality: "auto", autoApply: true }`, and reacts live via `chrome.storage.onChanged`.
-- [ ] **SET-03**: When enabled and `autoApply` is true, automatically applies saved default speed and best matching available default quality to newly loaded videos without throwing errors if preferred resolution exceeds video max.
+- [x] **SET-03**: When enabled and `autoApply` is true, automatically applies saved default speed and best matching available default quality to newly loaded videos without throwing errors if preferred resolution exceeds video max.
 
 ### Documentation & Verification
 
