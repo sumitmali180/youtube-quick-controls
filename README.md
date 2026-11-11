@@ -1,6 +1,6 @@
 # YouTube Quick Controls (speedoq)
 
-Production-ready **Manifest V3 Chrome Extension** adding compact **Playback Speed** (`[ 1.0x ▼ ]`) and **Video Quality** (`[ 1080p ▼ ]`) controls directly above YouTube's Like button across standard watch pages, fullscreen mode, and YouTube Shorts.
+Production-ready **Manifest V3 Chrome Extension** adding two compact horizontal rows of one-click **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill controls directly above YouTube's Like button across standard watch pages, fullscreen mode, and YouTube Shorts.
 
 ## Extension Package
 
@@ -15,3 +15,4 @@ Run the automated unit and real Google Chrome CDP verification suite:
 ```bash
 node --test tests/*.test.mjs
 ```
+

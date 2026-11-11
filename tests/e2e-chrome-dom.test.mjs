@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const EXT_DIR = path.join(ROOT_DIR, 'youtube-quick-controls');
 const CHROME_BIN = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const BRAVE_BIN = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
 
 function readExt(file) {
   return fs.readFileSync(path.join(EXT_DIR, file), 'utf8');
@@ -334,10 +335,10 @@ class CDPClient {
   }
 }
 
-async function launchChrome() {
+async function launchBrowser(binPath = CHROME_BIN, extraFlags = []) {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yqc-e2e-'));
   const proc = spawn(
-    CHROME_BIN,
+    binPath,
     [
       '--headless=new',
       '--no-sandbox',
@@ -347,6 +348,7 @@ async function launchChrome() {
       '--window-size=1280,900',
       `--user-data-dir=${userDataDir}`,
       '--remote-debugging-port=0',
+      ...extraFlags,
       'about:blank'
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] }
@@ -354,7 +356,7 @@ async function launchChrome() {
 
   const wsUrl = await new Promise((resolve, reject) => {
     let stderr = '';
-    const timer = setTimeout(() => reject(new Error(`Chrome start timeout: ${stderr}`)), 10000);
+    const timer = setTimeout(() => reject(new Error(`Browser start timeout: ${stderr}`)), 12000);
     proc.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
       const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
@@ -377,6 +379,10 @@ async function launchChrome() {
       try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   };
+}
+
+async function launchChrome() {
+  return launchBrowser(CHROME_BIN);
 }
 
 async function evalInPage(cdp, sessionId, expression) {
@@ -435,27 +441,42 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     await evalInPage(chrome.cdp, sessionId, contentJs);
     await new Promise((r) => setTimeout(r, 150));
 
-    // 1. Watch-page placement directly above Like button + target dimensions >= 24px
+    // 1. Watch-page placement directly above Like button + two horizontal pill rows + target dimensions >= 24px
     const watchLayout = await evalInPage(chrome.cdp, sessionId, `(() => {
       const hosts = document.querySelectorAll('#yqc-controls-host');
       const host = hosts[0];
       const likeBtn = document.getElementById('watch-like-btn');
-      const speedBtn = document.getElementById('yqc-speed-trigger');
-      const qualityBtn = document.getElementById('yqc-quality-trigger');
+      const speedRow = document.getElementById('yqc-speed-row');
+      const qualityRow = document.getElementById('yqc-quality-row');
+      const speedBtns = Array.from(speedRow.querySelectorAll('button.yqc-chip'));
+      const qualityBtns = Array.from(qualityRow.querySelectorAll('button.yqc-chip'));
+      const activeSpeed = speedBtns.find(b => b.getAttribute('aria-pressed') === 'true');
+      const activeQuality = qualityBtns.find(b => b.getAttribute('aria-pressed') === 'true');
       const hRect = host.getBoundingClientRect();
+      const sRowRect = speedRow.getBoundingClientRect();
+      const qRowRect = qualityRow.getBoundingClientRect();
       const lRect = likeBtn.getBoundingClientRect();
-      const sRect = speedBtn.getBoundingClientRect();
-      const qRect = qualityBtn.getBoundingClientRect();
+      const sRect = speedBtns[0].getBoundingClientRect();
+      const qRect = qualityBtns[0].getBoundingClientRect();
       likeBtn.click();
       return {
         hostCount: hosts.length,
         mode: host.dataset.yqcMode,
+        role: host.getAttribute('role'),
+        focusgroup: host.getAttribute('focusgroup'),
+        speedGroupRole: speedRow.getAttribute('role'),
+        qualityGroupRole: qualityRow.getAttribute('role'),
         hostBottom: Math.round(hRect.bottom),
         likeTop: Math.round(lRect.top),
+        speedRowBottom: Math.round(sRowRect.bottom),
+        qualityRowTop: Math.round(qRowRect.top),
         hostLeft: Math.round(hRect.left),
         likeLeft: Math.round(lRect.left),
-        speedLabel: speedBtn.innerText.trim(),
-        qualityLabel: qualityBtn.innerText.trim(),
+        speedLabels: speedBtns.map(b => b.textContent.trim()),
+        qualityLabels: qualityBtns.map(b => b.textContent.trim()),
+        activeSpeedLabel: activeSpeed?.textContent.trim(),
+        activeQualityLabel: activeQuality?.textContent.trim(),
+        activeQualityTitle: activeQuality?.title,
         speedDims: [Math.round(sRect.width), Math.round(sRect.height)],
         qualityDims: [Math.round(qRect.width), Math.round(qRect.height)],
         likeClicks: window.__TEST_STATE__.likeClicks
@@ -464,77 +485,116 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
 
     assert.equal(watchLayout.hostCount, 1);
     assert.equal(watchLayout.mode, 'watch');
+    assert.equal(watchLayout.role, 'toolbar');
+    assert.equal(watchLayout.focusgroup, 'toolbar wrap');
+    assert.equal(watchLayout.speedGroupRole, 'group');
+    assert.equal(watchLayout.qualityGroupRole, 'group');
+    assert.ok(watchLayout.speedRowBottom <= watchLayout.qualityRowTop + 2, 'Row 1 speed pills must sit directly above Row 2 quality pills');
     assert.ok(watchLayout.hostBottom <= watchLayout.likeTop + 1, `Controls must render ABOVE Like button (${watchLayout.hostBottom} <= ${watchLayout.likeTop})`);
     assert.ok(Math.abs(watchLayout.hostLeft - watchLayout.likeLeft) <= 10, 'Controls must align with Like button left edge');
     assert.ok(watchLayout.speedDims[0] >= 24 && watchLayout.speedDims[1] >= 24);
     assert.ok(watchLayout.qualityDims[0] >= 24 && watchLayout.qualityDims[1] >= 24);
     assert.equal(watchLayout.likeClicks, 1, 'Native Like button click handler must stay intact');
-    assert.equal(watchLayout.speedLabel, '1.0x');
-    assert.equal(watchLayout.qualityLabel, 'Auto (720p)');
+    assert.deepEqual(watchLayout.speedLabels, ['0.25x', '0.5x', '0.75x', '1.0x', '1.15x', '1.25x', '1.5x', '1.75x', '2.0x', '2.5x', '3.0x']);
+    assert.deepEqual(watchLayout.qualityLabels, ['Auto', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p']);
+    assert.equal(watchLayout.activeSpeedLabel, '1.0x');
+    assert.equal(watchLayout.activeQualityLabel, 'Auto');
+    assert.equal(watchLayout.activeQualityTitle, 'Auto (720p)');
 
-    // 2. Speed presets, custom YouTube-exposed rate, inline custom speed, ratechange sync & propagation isolation
+    // 2. One-click speed pills, custom YouTube-exposed rate, external ratechange sync, keyboard navigation & propagation isolation
     const speedRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
       const video = document.querySelector('#movie_player video');
-      const speedTrigger = document.getElementById('yqc-speed-trigger');
-      speedTrigger.click();
-      const rates = Array.from(document.querySelectorAll('#yqc-speed-menu .yqc-menu-item')).map(b => Number(b.dataset.yqcRate));
-      document.querySelector('#yqc-speed-menu [data-yqc-rate="2.25"]').click();
-      const after225 = { rate: video.playbackRate, pill: speedTrigger.innerText.trim() };
+      const speedRow = document.getElementById('yqc-speed-row');
+      const rates = Array.from(speedRow.querySelectorAll('button.yqc-chip')).map(b => Number(b.dataset.yqcRate));
+
+      // One click directly on 2.5x pill (no dropdown)
+      speedRow.querySelector('[data-yqc-rate="2.5"]').click();
+      const after25 = {
+        rate: video.playbackRate,
+        pressed: speedRow.querySelector('[data-yqc-rate="2.5"]').getAttribute('aria-pressed'),
+        pressedCount: speedRow.querySelectorAll('[aria-pressed="true"]').length
+      };
 
       // Custom YouTube exposed rate (1.15)
-      document.querySelector('#yqc-speed-menu [data-yqc-rate="1.15"]').click();
-      const afterCustomYt = { rate: video.playbackRate, pill: speedTrigger.innerText.trim() };
+      speedRow.querySelector('[data-yqc-rate="1.15"]').click();
+      const afterCustomYt = {
+        rate: video.playbackRate,
+        pressed: speedRow.querySelector('[data-yqc-rate="1.15"]').getAttribute('aria-pressed')
+      };
 
-      // Inline custom rate via numeric input
-      speedTrigger.click();
-      const customInput = document.querySelector('#yqc-speed-menu .yqc-custom-input');
-      customInput.value = '1.4';
-      customInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-      document.querySelector('#yqc-speed-menu .yqc-custom-apply').click();
-      const afterInlineCustom = { rate: video.playbackRate, pill: speedTrigger.innerText.trim() };
+      // External ratechange with custom non-standard speed (1.4) + 1.75 preset
+      video.playbackRate = 1.4;
+      video.dispatchEvent(new Event('ratechange'));
+      await new Promise(r => setTimeout(r, 60));
+      const dynamicCustomBtn = speedRow.querySelector('[data-yqc-rate="1.4"]');
+      const afterExternalCustom = {
+        exists: Boolean(dynamicCustomBtn),
+        label: dynamicCustomBtn?.textContent.trim(),
+        pressed: dynamicCustomBtn?.getAttribute('aria-pressed')
+      };
 
-      // External ratechange sync
       video.playbackRate = 1.75;
       video.dispatchEvent(new Event('ratechange'));
       await new Promise(r => setTimeout(r, 80));
+      const afterExternalPreset = speedRow.querySelector('[aria-pressed="true"]')?.textContent.trim();
+
+      // Toolbar keyboard navigation fallback when focusGroup isn't native
+      const startBtn = speedRow.querySelector('[data-yqc-rate="1"]');
+      startBtn.focus();
+      startBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      const afterArrowRightRate = document.activeElement?.dataset?.yqcRate || null;
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      const afterArrowDownInQuality = Boolean(document.getElementById('yqc-quality-row')?.contains(document.activeElement));
 
       return {
         rates,
-        after225,
+        after25,
         afterCustomYt,
-        afterInlineCustom,
-        afterExternal: speedTrigger.innerText.trim(),
+        afterExternalCustom,
+        afterExternalPreset,
+        afterArrowRightRate,
+        afterArrowDownInQuality,
+        hasNativeFocusGroup: 'focusGroup' in HTMLElement.prototype,
         playerClicks: window.__TEST_STATE__.playerClicks,
         globalHotkeys: window.__TEST_STATE__.globalHotkeys
       };
     })()`);
 
-    assert.equal(speedRes.rates.includes(2.25), true);
+    assert.equal(speedRes.rates.includes(2.5), true);
     assert.equal(speedRes.rates.includes(1.15), true);
-    assert.equal(speedRes.after225.rate, 2.25);
+    assert.equal(speedRes.after25.rate, 2.5);
+    assert.equal(speedRes.after25.pressed, 'true');
+    assert.equal(speedRes.after25.pressedCount, 1);
     assert.equal(speedRes.afterCustomYt.rate, 1.15);
-    assert.equal(speedRes.afterInlineCustom.rate, 1.4);
-    assert.equal(speedRes.afterExternal, '1.75x');
+    assert.equal(speedRes.afterCustomYt.pressed, 'true');
+    assert.equal(speedRes.afterExternalCustom.exists, true);
+    assert.equal(speedRes.afterExternalCustom.label, '1.4x');
+    assert.equal(speedRes.afterExternalCustom.pressed, 'true');
+    assert.equal(speedRes.afterExternalPreset, '1.75x');
+    if (!speedRes.hasNativeFocusGroup) {
+      assert.equal(speedRes.afterArrowRightRate, '1.15');
+      assert.equal(speedRes.afterArrowDownInQuality, true);
+    }
     assert.equal(speedRes.playerClicks, 0, 'Clicking controls must not bubble clicks to #movie_player');
-    assert.equal(speedRes.globalHotkeys, 0, 'Typing in custom speed input must not trigger YouTube hotkeys');
+    assert.equal(speedRes.globalHotkeys, 0, 'Toolbar keys must not trigger YouTube hotkeys');
 
-    // 3. Dynamic quality list, limited video, loading video, & refusal tooltip/rollback
+    // 3. One-click quality pills, unavailable quality disabled (aria-disabled), loading state & refusal tooltip/rollback
     const qualityRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
-      const qTrigger = document.getElementById('yqc-quality-trigger');
-      // Switch cleanly to 1080p
-      qTrigger.click();
-      document.querySelector('#yqc-quality-menu [data-yqc-quality="hd1080"]').click();
+      const qualityRow = document.getElementById('yqc-quality-row');
+      // One click directly to 1080p
+      qualityRow.querySelector('[data-yqc-quality="hd1080"]').click();
       await new Promise(r => setTimeout(r, 200));
-      const applied1080 = qTrigger.innerText.trim();
+      const applied1080 = qualityRow.querySelector('[aria-pressed="true"]')?.dataset?.yqcQuality;
+      const autoAfter1080 = qualityRow.querySelector('[data-yqc-quality="auto"]')?.getAttribute('aria-pressed');
 
       // Simulate player refusing hd2160 while staying on hd1080
       window.__TEST_STATE__.refuseQuality = true;
-      qTrigger.click();
-      document.querySelector('#yqc-quality-menu [data-yqc-quality="hd2160"]').click();
+      qualityRow.querySelector('[data-yqc-quality="hd2160"]').click();
       await new Promise(r => setTimeout(r, 1750));
       const tooltip = document.querySelector('#yqc-controls-host .yqc-tooltip');
       const refusedRes = {
-        pillAfterRefusal: qTrigger.innerText.trim(),
+        activeAfterRefusal: qualityRow.querySelector('[aria-pressed="true"]')?.dataset?.yqcQuality,
+        refusedPressed: qualityRow.querySelector('[data-yqc-quality="hd2160"]')?.getAttribute('aria-pressed'),
         tooltipVisible: !tooltip.hidden,
         tooltipText: tooltip.innerText.trim()
       };
@@ -546,23 +606,45 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       window.__TEST_STATE__.currentQuality = 'large';
       window.__TEST_STATE__.preferredQuality = 'large';
       await window.__YQC_CONTROLLER__.fetchAndUpdateQualityState({ tryApplyDefaults: false });
-      const limitedOpts = Array.from(document.querySelectorAll('#yqc-quality-menu .yqc-menu-item')).map(b => b.dataset.yqcQuality);
+      const enabledOpts = Array.from(qualityRow.querySelectorAll('button.yqc-chip:not([aria-disabled="true"])')).map(b => b.dataset.yqcQuality);
+      const disabledOpts = Array.from(qualityRow.querySelectorAll('button.yqc-chip[aria-disabled="true"]')).map(b => b.dataset.yqcQuality);
 
-      // Simulate still loading ([]) then ready
+      // Clicking disabled option must be ignored
+      qualityRow.querySelector('[data-yqc-quality="hd1080"]').click();
+      await new Promise(r => setTimeout(r, 50));
+      const still480AfterDisabledClick = qualityRow.querySelector('[aria-pressed="true"]')?.dataset?.yqcQuality;
+
+      // Simulate still loading ([]) -> all slots disabled, no active pill
       window.__TEST_STATE__.levels = [];
       window.__TEST_STATE__.currentQuality = 'unknown';
       await window.__YQC_CONTROLLER__.fetchAndUpdateQualityState({ tryApplyDefaults: false });
-      const loadingLabel = qTrigger.innerText.trim();
+      const loadingEnabledCount = qualityRow.querySelectorAll('button.yqc-chip:not([aria-disabled="true"])').length;
+      const loadingPressedCount = qualityRow.querySelectorAll('button.yqc-chip[aria-pressed="true"]').length;
 
-      return { applied1080, refusedRes, limitedOpts, loadingLabel };
+      return {
+        applied1080,
+        autoAfter1080,
+        refusedRes,
+        enabledOpts,
+        disabledOpts,
+        still480AfterDisabledClick,
+        loadingEnabledCount,
+        loadingPressedCount
+      };
     })()`);
 
-    assert.equal(qualityRes.applied1080, '1080p60');
-    assert.equal(qualityRes.refusedRes.pillAfterRefusal, '1080p60', 'Must keep previous quality visible on refusal');
+    assert.equal(qualityRes.applied1080, 'hd1080');
+    assert.equal(qualityRes.autoAfter1080, 'false');
+    assert.equal(qualityRes.refusedRes.activeAfterRefusal, 'hd1080', 'Must keep previous quality active on refusal');
+    assert.equal(qualityRes.refusedRes.refusedPressed, 'false');
     assert.equal(qualityRes.refusedRes.tooltipVisible, true, 'Must display subtle error tooltip on refusal');
     assert.match(qualityRes.refusedRes.tooltipText, /⚠/);
-    assert.deepEqual(qualityRes.limitedOpts, ['large', 'medium']);
-    assert.equal(qualityRes.loadingLabel, 'Loading...');
+    assert.deepEqual(qualityRes.enabledOpts, ['medium', 'large']);
+    assert.ok(qualityRes.disabledOpts.includes('auto'));
+    assert.ok(qualityRes.disabledOpts.includes('hd1080'));
+    assert.equal(qualityRes.still480AfterDisabledClick, 'large');
+    assert.equal(qualityRes.loadingEnabledCount, 0);
+    assert.equal(qualityRes.loadingPressedCount, 0);
 
     // Restore full quality options for Fullscreen check
     await evalInPage(chrome.cdp, sessionId, `(async () => {
@@ -596,6 +678,12 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const fsLike = fsEl?.querySelector('.ytp-fullscreen-quick-actions button[aria-label*="like" i]');
       const hRect = host?.getBoundingClientRect();
       const lRect = fsLike?.getBoundingClientRect();
+      const fsVideo = fsEl?.querySelector('video');
+      host?.querySelector('#yqc-speed-row [data-yqc-rate="2"]')?.click();
+      const fsRateAfterClick = fsVideo?.playbackRate;
+      host?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      fsEl?.classList.add('ytp-autohide');
+      const autohideOpacity = host ? getComputedStyle(host).opacity : '';
       return {
         isFullscreen: Boolean(fsEl),
         insideTopLayer: Boolean(fsEl && host && fsEl.contains(host)),
@@ -605,11 +693,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         hostBottom: Math.round(hRect?.bottom || 0),
         fsLikeTop: Math.round(lRect?.top || 0),
         visibleWidth: Math.round(hRect?.width || 0),
-        autohideOpacity: (() => {
-          document.getElementById('yqc-speed-trigger').click();
-          fsEl.classList.add('ytp-autohide');
-          return getComputedStyle(host).opacity;
-        })()
+        fsRateAfterClick,
+        autohideOpacity
       };
     })()`);
 
@@ -619,8 +704,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(fsDelhi.mode, 'fullscreen');
     assert.equal(fsDelhi.fsPlacement, 'above-like');
     assert.ok(fsDelhi.visibleWidth > 50);
+    assert.equal(fsDelhi.fsRateAfterClick, 2, 'Clicking speed chip in fullscreen must immediately change video playbackRate');
     assert.ok(fsDelhi.hostBottom <= fsDelhi.fsLikeTop + 2, `Fullscreen controls must sit directly ABOVE fullscreen Like button (${fsDelhi.hostBottom} <= ${fsDelhi.fsLikeTop})`);
-    assert.equal(fsDelhi.autohideOpacity, '1', 'Open menu must remain visible even if .ytp-autohide toggles');
+    assert.equal(fsDelhi.autohideOpacity, '1', 'Hovered controls must remain visible even if .ytp-autohide toggles');
 
     // Classic Fullscreen fallback test (remove .ytp-fullscreen-quick-actions)
     const fsClassic = await evalInPage(chrome.cdp, sessionId, `(() => {
@@ -653,28 +739,22 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(postFsWatch.hostCount, 1);
     assert.equal(postFsWatch.mode, 'watch');
 
-    // 5. Shorts, SPA navigation, Auto-apply & Dark/Light theme + Outside Click & Escape
+    // 5. Shorts, SPA navigation, Auto-apply & Dark/Light theme styling on inline pill rows
     const spaThemeRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
       // Enable non-1.0x defaultSpeed & defaultQuality in storage for next navigation auto-apply
       await chrome.storage.sync.set({ enabled: true, defaultSpeed: 1.5, defaultQuality: 'hd1440', autoApply: true });
 
-      // Theme Light -> Dark live adaptation
+      // Theme Light -> Dark live adaptation directly on inline pill buttons
       document.documentElement.removeAttribute('dark');
-      const qTrig = document.getElementById('yqc-quality-trigger');
-      const qMenu = document.getElementById('yqc-quality-menu');
-      qTrig.click();
-      const lightMenuBg = getComputedStyle(qMenu).backgroundColor;
+      await new Promise(r => setTimeout(r, 180));
+      const activePill = document.querySelector('#yqc-speed-row .yqc-chip[aria-pressed="true"]');
+      const inactivePill = document.querySelector('#yqc-speed-row .yqc-chip[aria-pressed="false"]');
+      const lightActiveBg = getComputedStyle(activePill).backgroundColor;
+      const lightInactiveBg = getComputedStyle(inactivePill).backgroundColor;
       document.documentElement.setAttribute('dark', '');
-      const darkMenuBg = getComputedStyle(qMenu).backgroundColor;
-
-      // Press Escape closes menu and returns focus to trigger
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      const afterEsc = { expanded: qTrig.getAttribute('aria-expanded'), activeElId: document.activeElement?.id };
-
-      // Outside click dismiss check
-      qTrig.click();
-      document.body.click();
-      const afterOutside = qTrig.getAttribute('aria-expanded');
+      await new Promise(r => setTimeout(r, 180));
+      const darkActiveBg = getComputedStyle(activePill).backgroundColor;
+      const darkInactiveBg = getComputedStyle(inactivePill).backgroundColor;
 
       // SPA Navigation: Watch -> Shorts
       window.dispatchEvent(new Event('yt-navigate-start'));
@@ -694,6 +774,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         mode: s1Host?.dataset.yqcMode,
         inActiveReel: reel1.contains(s1Host),
         r1Rate: r1Vid.playbackRate,
+        r1ActiveSpeedText: s1Host?.querySelector('#yqc-speed-row [aria-pressed="true"]')?.textContent.trim(),
         r2RateUntouched: r2Vid.playbackRate
       };
 
@@ -717,19 +798,18 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       await new Promise(r => setTimeout(r, 150));
       const homeHostCount = document.querySelectorAll('#yqc-controls-host').length;
 
-      return { lightMenuBg, darkMenuBg, afterEsc, afterOutside, shorts1Result, shorts2Result, homeHostCount };
+      return { lightActiveBg, lightInactiveBg, darkActiveBg, darkInactiveBg, shorts1Result, shorts2Result, homeHostCount };
     })()`);
 
-    assert.equal(spaThemeRes.lightMenuBg, 'rgb(255, 255, 255)');
-    assert.equal(spaThemeRes.darkMenuBg, 'rgb(40, 40, 40)');
-    assert.equal(spaThemeRes.afterEsc.expanded, 'false');
-    assert.equal(spaThemeRes.afterEsc.activeElId, 'yqc-quality-trigger');
-    assert.equal(spaThemeRes.afterOutside, 'false');
+    assert.equal(spaThemeRes.lightActiveBg, 'rgb(15, 15, 15)');
+    assert.equal(spaThemeRes.darkActiveBg, 'rgb(241, 241, 241)');
+    assert.notEqual(spaThemeRes.lightInactiveBg, spaThemeRes.darkInactiveBg);
 
     assert.equal(spaThemeRes.shorts1Result.hostCount, 1);
     assert.equal(spaThemeRes.shorts1Result.mode, 'shorts');
     assert.equal(spaThemeRes.shorts1Result.inActiveReel, true);
     assert.equal(spaThemeRes.shorts1Result.r1Rate, 1.5, 'Auto-apply defaultSpeed applies on Shorts navigation');
+    assert.equal(spaThemeRes.shorts1Result.r1ActiveSpeedText, '1.5x');
     assert.equal(spaThemeRes.shorts1Result.r2RateUntouched, 1.0, 'Offscreen Shorts reel must remain untouched');
 
     assert.equal(spaThemeRes.shorts2Result.inReel2, true);
@@ -845,3 +925,99 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     server.close();
   }
 });
+
+test(
+  'Brave unpacked MV3 --load-extension E2E: service_worker & popup chrome.storage persistence',
+  { skip: !fs.existsSync(BRAVE_BIN) },
+  async () => {
+    const brave = await launchBrowser(BRAVE_BIN, [
+      `--disable-extensions-except=${EXT_DIR}`,
+      `--load-extension=${EXT_DIR}`
+    ]);
+
+    try {
+      let extOrigin = null;
+      for (let attempt = 0; attempt < 25 && !extOrigin; attempt += 1) {
+        const { targetInfos } = await brave.cdp.send('Target.getTargets');
+        const swTarget = targetInfos.find(
+          (t) => t.type === 'service_worker' && t.url.endsWith('/background.js')
+        );
+        if (swTarget) {
+          extOrigin = swTarget.url.replace(/\/background\.js$/, '');
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      assert.ok(extOrigin, 'MV3 background.js service worker must register under --load-extension');
+
+      const { targetId } = await brave.cdp.send('Target.createTarget', {
+        url: 'about:blank'
+      });
+      const { sessionId } = await brave.cdp.send('Target.attachToTarget', {
+        targetId,
+        flatten: true
+      });
+      await brave.cdp.send('Page.enable', {}, sessionId);
+      await brave.cdp.send('Runtime.enable', {}, sessionId);
+      await brave.cdp.send('Page.navigate', { url: `${extOrigin}/popup.html` }, sessionId);
+
+      // Wait cleanly for popup.js async initPopup() to hydrate storage -> UI
+      for (let i = 0; i < 30; i += 1) {
+        const ready = await evalInPage(
+          brave.cdp,
+          sessionId,
+          `['Synced', 'Local storage mode'].includes(document.querySelector('#status-banner .status-text')?.textContent?.trim())`
+        );
+        if (ready) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      const beforeRes = await evalInPage(
+        brave.cdp,
+        sessionId,
+        `(async () => {
+          const speedSel = document.getElementById('setting-default-speed');
+          const qualitySel = document.getElementById('setting-default-quality');
+          const statusText = document.querySelector('#status-banner .status-text');
+          const initialSpeed = speedSel.value;
+          speedSel.value = '1.5';
+          speedSel.dispatchEvent(new Event('change'));
+          for (let i = 0; i < 40; i += 1) {
+            const msg = statusText?.textContent?.toLowerCase() || '';
+            if (msg.includes('saved')) break;
+            await new Promise(r => setTimeout(r, 25));
+          }
+          qualitySel.value = 'hd1080';
+          qualitySel.dispatchEvent(new Event('change'));
+          await new Promise(r => setTimeout(r, 120));
+          return { initialSpeed };
+        })()`
+      );
+      assert.equal(beforeRes.initialSpeed, '1');
+
+      await brave.cdp.send('Page.reload', {}, sessionId);
+      await new Promise((r) => setTimeout(r, 120));
+      for (let i = 0; i < 30; i += 1) {
+        const ready = await evalInPage(
+          brave.cdp,
+          sessionId,
+          `['Synced', 'Local storage mode'].includes(document.querySelector('#status-banner .status-text')?.textContent?.trim())`
+        );
+        if (ready) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const persisted = await evalInPage(
+        brave.cdp,
+        sessionId,
+        `({
+          speed: document.getElementById('setting-default-speed')?.value,
+          quality: document.getElementById('setting-default-quality')?.value
+        })`
+      );
+      assert.equal(persisted.speed, '1.5');
+      assert.equal(persisted.quality, 'hd1080');
+    } finally {
+      await brave.dispose();
+    }
+  }
+);

@@ -24,7 +24,19 @@
     autoApply: true
   });
 
-  const STANDARD_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0];
+  const STANDARD_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+
+  const STANDARD_QUALITY_SLOTS = Object.freeze([
+    { quality: 'auto', label: 'Auto', isAutoOption: true },
+    { quality: 'tiny', label: '144p', isAutoOption: false },
+    { quality: 'small', label: '240p', isAutoOption: false },
+    { quality: 'medium', label: '360p', isAutoOption: false },
+    { quality: 'large', label: '480p', isAutoOption: false },
+    { quality: 'hd720', label: '720p', isAutoOption: false },
+    { quality: 'hd1080', label: '1080p', isAutoOption: false },
+    { quality: 'hd1440', label: '1440p', isAutoOption: false },
+    { quality: 'hd2160', label: '2160p', isAutoOption: false }
+  ]);
 
   const QUALITY_RANK = Object.freeze({
     highres: 9,
@@ -221,25 +233,9 @@
     return null;
   }
 
-  function createCaretSvg() {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 12 12');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('class', 'yqc-caret');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'M2.5 4.25L6 7.75L9.5 4.25');
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', 'currentColor');
-    path.setAttribute('stroke-width', '1.6');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(path);
-    return svg;
-  }
-
   /**
-   * Main UI & Media Controller managing watch placement, speed, quality,
-   * theme responsiveness, and popover lifecycle.
+   * Main UI & Media Controller managing two inline pill rows across watch,
+   * fullscreen, and Shorts views alongside speed/quality sync.
    */
   class QuickControlsController {
     constructor() {
@@ -262,9 +258,9 @@
       this.isInternalRateChange = false;
       this.expectedInternalRate = null;
       this.isQualitySwitching = false;
+      this.pendingQualityTarget = null;
       this.manualSpeedOverride = false;
       this.manualQualityOverride = false;
-      this.openDropdownName = null;
       this.lastVideoKey = null;
       this.lastUrlHref = typeof location === 'object' ? location.href : '';
       this.appliedDefaultsForKey = null;
@@ -356,10 +352,6 @@
           if (this.hostEl?.isConnected && this.activeAnchor) {
             this.alignHostWithAnchor(this.hostEl, this.activeAnchor);
           }
-          if (this.openDropdownName && this.ui?.[this.openDropdownName]) {
-            const ctrl = this.ui[this.openDropdownName];
-            this.positionDropdownFallback(ctrl.trigger, ctrl.dropdown);
-          }
         },
         { signal }
       );
@@ -396,16 +388,16 @@
     }
 
     handleNavigationStart() {
-      this.closeAllDropdowns({ returnFocus: false });
+      this.stopFullscreenKeepalive();
       this.clearQualityTimers();
       this.bridge.clearPending();
       this.isQualitySwitching = false;
+      this.pendingQualityTarget = null;
       this.manualSpeedOverride = false;
       this.manualQualityOverride = false;
     }
 
     handleFullscreenTransition() {
-      this.closeAllDropdowns({ returnFocus: false });
       this.stopFullscreenKeepalive();
       this.ensureMounted();
       // YouTube may render .ytp-fullscreen-quick-actions slightly asynchronously after fullscreenchange
@@ -729,9 +721,16 @@
         try {
           const likeRect = anchor.likeEl.getBoundingClientRect();
           const parentRect = anchor.mountParent.getBoundingClientRect();
+          const hostWidth = host.getBoundingClientRect().width || host.offsetWidth || 0;
           if (likeRect.width > 0 && parentRect.width > 0) {
-            const offset = Math.max(0, Math.round(likeRect.left - parentRect.left));
-            host.style.marginInlineStart = offset > 0 && offset < parentRect.width ? `${offset}px` : '0px';
+            const rawOffset = Math.max(0, Math.round(likeRect.left - parentRect.left));
+            const maxOffset =
+              hostWidth > 0 && parentRect.width > hostWidth
+                ? Math.round(parentRect.width - hostWidth)
+                : rawOffset;
+            const clampedOffset = Math.min(rawOffset, Math.max(0, maxOffset));
+            host.style.marginInlineStart =
+              clampedOffset > 0 && clampedOffset < parentRect.width ? `${clampedOffset}px` : '0px';
           }
         } catch {
           host.style.marginInlineStart = '0px';
@@ -744,13 +743,17 @@
         try {
           const likeRect = anchor.likeEl.getBoundingClientRect();
           const playerRect = anchor.fsPlayer.getBoundingClientRect();
-          const hostWidth = host.offsetWidth || 156;
+          const hostWidth = host.offsetWidth || 380;
+          const hostHeight = host.offsetHeight || 56;
           if (likeRect.height > 0 && playerRect.height > 0) {
             const rawLeft = likeRect.left - playerRect.left;
             const maxLeft = Math.max(8, playerRect.width - hostWidth - 8);
             const clampedLeft = Math.max(8, Math.min(Math.round(rawLeft), Math.round(maxLeft)));
             const rawBottom = playerRect.bottom - likeRect.top + 8;
-            const clampedBottom = Math.max(56, Math.min(Math.round(rawBottom), Math.round(playerRect.height - 48)));
+            const clampedBottom = Math.max(
+              56,
+              Math.min(Math.round(rawBottom), Math.round(playerRect.height - hostHeight - 8))
+            );
             host.style.left = `${clampedLeft}px`;
             host.style.bottom = `${clampedBottom}px`;
           }
@@ -835,9 +838,18 @@
         clearInterval(this.keepaliveTimer);
         this.keepaliveTimer = null;
       }
-      if (this.hostEl && !this.openDropdownName) {
+      if (this.hostEl) {
         delete this.hostEl.dataset.yqcOpen;
       }
+    }
+
+    buildRowGroup(id, className, ariaLabel) {
+      const row = document.createElement('div');
+      row.id = id;
+      row.className = `yqc-row ${className}`;
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', ariaLabel);
+      return row;
     }
 
     buildAndAttachHost(anchor) {
@@ -856,8 +868,12 @@
       }
       host.setAttribute('role', 'toolbar');
       host.setAttribute('aria-label', 'YouTube Quick Controls');
+      host.setAttribute('focusgroup', 'toolbar wrap');
 
-      if (anchor.mode === 'watch' || (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'quick-actions-inline')) {
+      if (
+        anchor.mode === 'watch' ||
+        (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'quick-actions-inline')
+      ) {
         anchor.mountParent.classList.add('yqc-actions-column');
         this.anchorColumnEl = anchor.mountParent;
       }
@@ -874,20 +890,65 @@
         );
       }
 
-      host.addEventListener('pointerenter', () => {
-        if (this.mode === 'fullscreen') {
-          this.startFullscreenKeepalive();
-        }
-      }, { signal });
+      let isPointerInside = false;
+      const shouldKeepAliveInFullscreen = () =>
+        isPointerInside ||
+        Boolean(document.activeElement && host.contains(document.activeElement));
 
-      host.addEventListener('pointerleave', () => {
-        if (!this.openDropdownName) {
-          this.stopFullscreenKeepalive();
-        }
-      }, { signal });
+      host.addEventListener(
+        'pointerenter',
+        () => {
+          isPointerInside = true;
+          if (this.mode === 'fullscreen') {
+            this.startFullscreenKeepalive();
+          }
+        },
+        { signal }
+      );
 
-      const speedControl = this.buildDropdownControl('speed', 'Playback speed', '1.0x');
-      const qualityControl = this.buildDropdownControl('quality', 'Video quality', 'Auto');
+      host.addEventListener(
+        'pointerleave',
+        () => {
+          isPointerInside = false;
+          if (!shouldKeepAliveInFullscreen()) {
+            this.stopFullscreenKeepalive();
+          }
+        },
+        { signal }
+      );
+
+      host.addEventListener(
+        'focusin',
+        () => {
+          if (this.mode === 'fullscreen') {
+            this.startFullscreenKeepalive();
+          }
+        },
+        { signal }
+      );
+
+      host.addEventListener(
+        'focusout',
+        (event) => {
+          const nextFocused = event.relatedTarget;
+          if (nextFocused && host.contains(nextFocused)) {
+            return;
+          }
+          if (!isPointerInside) {
+            this.stopFullscreenKeepalive();
+          }
+        },
+        { signal }
+      );
+
+      const speedRow = this.buildRowGroup('yqc-speed-row', 'yqc-row-speed', 'Playback speed');
+      const qualityRow = this.buildRowGroup('yqc-quality-row', 'yqc-row-quality', 'Video quality');
+
+      const qualityStatus = document.createElement('span');
+      qualityStatus.className = 'yqc-row-status';
+      qualityStatus.setAttribute('aria-live', 'polite');
+      qualityStatus.hidden = true;
+      qualityRow.appendChild(qualityStatus);
 
       const tooltip = document.createElement('div');
       tooltip.className = 'yqc-tooltip';
@@ -901,7 +962,7 @@
       const tooltipText = document.createElement('span');
       tooltip.append(tooltipIcon, tooltipText);
 
-      host.append(speedControl.group, qualityControl.group, tooltip);
+      host.append(speedRow, qualityRow, tooltip);
 
       if (anchor.referenceNode && anchor.referenceNode.parentElement === anchor.mountParent) {
         anchor.mountParent.insertBefore(host, anchor.referenceNode);
@@ -913,41 +974,16 @@
 
       this.hostEl = host;
       this.ui = {
-        speed: speedControl,
-        quality: qualityControl,
+        speedRow,
+        qualityRow,
+        qualityStatus,
         tooltip,
         tooltipText
       };
 
-      this.alignHostWithAnchor(host, anchor);
-      this.setupDropdownBehavior('speed', speedControl, signal);
-      this.setupDropdownBehavior('quality', qualityControl, signal);
-
-      document.addEventListener(
-        'click',
-        (event) => {
-          if (!this.hostEl || !this.hostEl.contains(event.target)) {
-            this.closeAllDropdowns({ returnFocus: false });
-          }
-        },
-        { signal }
-      );
-
-      document.addEventListener(
-        'keydown',
-        (event) => {
-          if (event.key !== 'Escape') return;
-          const hasOpenMenu =
-            Boolean(this.openDropdownName) ||
-            ['speed', 'quality'].some((candidate) => this.isDropdownOpen(candidate));
-          if (hasOpenMenu) {
-            event.preventDefault();
-            event.stopPropagation();
-            this.closeAllDropdowns({ returnFocus: true });
-          }
-        },
-        { signal }
-      );
+      if (typeof HTMLElement !== 'undefined' && !('focusGroup' in HTMLElement.prototype)) {
+        this.installToolbarKeyboardFallback(host, signal);
+      }
 
       if (typeof ResizeObserver === 'function' && (anchor.likeEl || anchor.fsPlayer)) {
         this.resizeObserver = new ResizeObserver(() => {
@@ -961,335 +997,103 @@
         }
       }
 
-      this.renderSpeedMenu();
-      this.renderQualityMenu();
-      this.syncSpeedUi(this.videoEl ? this.videoEl.playbackRate : 1.0);
+      this.renderSpeedRow();
+      this.renderQualityRow();
+      this.syncRovingTabIndex(host);
+      this.alignHostWithAnchor(host, anchor);
     }
 
-    buildDropdownControl(name, ariaLabel, initialLabel) {
-      const group = document.createElement('div');
-      group.className = 'yqc-control-group';
-
-      const triggerId = `yqc-${name}-trigger`;
-      const menuId = `yqc-${name}-menu`;
-      const anchorToken = `--yqc-anchor-${name}`;
-
-      const trigger = document.createElement('button');
-      trigger.type = 'button';
-      trigger.id = triggerId;
-      trigger.className = `yqc-pill yqc-pill-${name}`;
-      trigger.setAttribute('aria-haspopup', 'menu');
-      trigger.setAttribute('aria-expanded', 'false');
-      trigger.setAttribute('aria-label', ariaLabel);
-
-      if ('anchorName' in trigger.style) {
-        trigger.style.anchorName = anchorToken;
+    syncRovingTabIndex(host = this.hostEl) {
+      if (!host) return;
+      if (typeof HTMLElement !== 'undefined' && 'focusGroup' in HTMLElement.prototype) {
+        return;
       }
+      const items = Array.from(host.querySelectorAll('button.yqc-chip'));
+      if (items.length === 0) return;
 
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'yqc-pill-label';
-      labelSpan.textContent = initialLabel;
+      const activeFocused =
+        document.activeElement && host.contains(document.activeElement)
+          ? items.find((el) => el === document.activeElement)
+          : null;
+      const existingStop = items.find((el) => el.getAttribute('tabindex') === '0');
+      const activePressed = items.find((el) => el.getAttribute('aria-pressed') === 'true');
+      const stop = activeFocused || existingStop || activePressed || items[0];
 
-      const busyDot = document.createElement('span');
-      busyDot.className = 'yqc-pill-busy';
-      busyDot.setAttribute('aria-hidden', 'true');
-
-      trigger.append(labelSpan, busyDot, createCaretSvg());
-
-      const dropdown = document.createElement('div');
-      dropdown.id = menuId;
-      dropdown.className = `yqc-dropdown yqc-dropdown-${name}`;
-      dropdown.setAttribute('aria-labelledby', triggerId);
-
-      const supportsPopover =
-        typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
-      if (supportsPopover) {
-        dropdown.setAttribute('popover', 'auto');
-      } else {
-        dropdown.hidden = true;
+      for (const item of items) {
+        item.setAttribute('tabindex', item === stop ? '0' : '-1');
       }
-
-      if ('positionAnchor' in dropdown.style) {
-        dropdown.style.positionAnchor = anchorToken;
-      }
-
-      // Apply native command invoker attributes when supported (Modern Web Guidance `menu`)
-      const supportsInvoker =
-        typeof HTMLButtonElement !== 'undefined' && 'commandForElement' in HTMLButtonElement.prototype;
-      if (supportsInvoker && supportsPopover) {
-        trigger.setAttribute('commandfor', menuId);
-        trigger.setAttribute('command', 'toggle-popover');
-      }
-
-      const menuList = document.createElement('div');
-      menuList.className = 'yqc-menu-list';
-      menuList.setAttribute('focusgroup', 'menu nomemory');
-      if (typeof HTMLElement !== 'undefined' && !('focusGroup' in HTMLElement.prototype)) {
-        menuList.setAttribute('role', 'menu');
-      }
-
-      dropdown.appendChild(menuList);
-
-      let customInput = null;
-      let customApplyBtn = null;
-      if (name === 'speed') {
-        const customRow = document.createElement('div');
-        customRow.className = 'yqc-custom-row';
-
-        customInput = document.createElement('input');
-        customInput.type = 'number';
-        customInput.className = 'yqc-custom-input';
-        customInput.min = '0.1';
-        customInput.max = '16';
-        customInput.step = '0.05';
-        customInput.placeholder = '1.15';
-        customInput.setAttribute('aria-label', 'Custom playback speed');
-
-        customApplyBtn = document.createElement('button');
-        customApplyBtn.type = 'button';
-        customApplyBtn.className = 'yqc-custom-apply';
-        customApplyBtn.textContent = 'Set';
-
-        customRow.append(customInput, customApplyBtn);
-        dropdown.appendChild(customRow);
-      }
-
-      group.append(trigger, dropdown);
-      return { group, trigger, labelSpan, dropdown, menuList, customInput, customApplyBtn, supportsPopover, supportsInvoker };
     }
 
-    setupDropdownBehavior(name, control, signal) {
-      const { trigger, dropdown, menuList, customInput, customApplyBtn, supportsPopover, supportsInvoker } = control;
-
-      const handleOpen = () => {
-        if (this.openDropdownName === name) {
-          this.positionDropdownFallback(trigger, dropdown);
-          return;
-        }
-        if (this.openDropdownName && this.openDropdownName !== name) {
-          this.closeDropdown(this.openDropdownName, { returnFocus: false });
-        }
-        this.openDropdownName = name;
-        trigger.setAttribute('aria-expanded', 'true');
-        if (this.mode === 'fullscreen') {
-          this.startFullscreenKeepalive();
-        }
-        this.positionDropdownFallback(trigger, dropdown);
-        if (name === 'quality') {
-          void this.fetchAndUpdateQualityState({ tryApplyDefaults: false });
-        }
-      };
-
-      const handleClose = () => {
-        const wasTrackedOpen =
-          this.openDropdownName === name || trigger.getAttribute('aria-expanded') === 'true';
-        if (this.openDropdownName === name) {
-          this.openDropdownName = null;
-        }
-        trigger.setAttribute('aria-expanded', 'false');
-        if (wasTrackedOpen) {
-          this.stopFullscreenKeepalive();
-        }
-      };
-
-      if (supportsPopover) {
-        dropdown.addEventListener(
-          'beforetoggle',
-          (event) => {
-            if (event.newState === 'open') {
-              handleOpen();
-            } else {
-              handleClose();
-            }
-          },
-          { signal }
-        );
-        dropdown.addEventListener(
-          'toggle',
-          (event) => {
-            const isActuallyOpen = this.isDropdownOpen(name);
-            if (event.newState === 'open' && isActuallyOpen) {
-              handleOpen();
-            } else if (event.newState === 'closed' && !isActuallyOpen) {
-              handleClose();
-            }
-          },
-          { signal }
-        );
-      }
-
-      trigger.addEventListener(
-        'click',
+    installToolbarKeyboardFallback(host, signal) {
+      host.addEventListener(
+        'focusin',
         (event) => {
-          event.stopPropagation();
-          if (supportsPopover && supportsInvoker) {
-            // Browser handles toggle via commandfor="menuId" command="toggle-popover"
-            return;
-          }
-          if (supportsPopover) {
-            dropdown.togglePopover();
-            return;
-          }
-          const isOpening = dropdown.hidden;
-          if (isOpening) {
-            dropdown.hidden = false;
-            handleOpen();
-          } else {
-            dropdown.hidden = true;
-            handleClose();
+          const target = event.target?.closest?.('button.yqc-chip');
+          if (!target || !host.contains(target)) return;
+          for (const item of host.querySelectorAll('button.yqc-chip')) {
+            item.setAttribute('tabindex', item === target ? '0' : '-1');
           }
         },
         { signal }
       );
 
-      // Keyboard fallback navigation when native focusGroup is unavailable
-      if (typeof HTMLElement !== 'undefined' && !('focusGroup' in HTMLElement.prototype)) {
-        menuList.addEventListener(
-          'keydown',
-          (event) => {
-            const items = Array.from(menuList.querySelectorAll('button.yqc-menu-item:not(:disabled)'));
-            if (items.length === 0) return;
-            const currentIndex = items.indexOf(document.activeElement);
-            let nextIndex = -1;
+      host.addEventListener(
+        'keydown',
+        (event) => {
+          const target = event.target?.closest?.('button.yqc-chip');
+          if (!target || !host.contains(target)) return;
 
-            if (event.key === 'ArrowDown') {
-              nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
-            } else if (event.key === 'ArrowUp') {
-              nextIndex = currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
-            } else if (event.key === 'Home') {
-              nextIndex = 0;
-            } else if (event.key === 'End') {
-              nextIndex = items.length - 1;
-            } else if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              this.closeDropdown(name, { returnFocus: true });
-              return;
+          const items = Array.from(host.querySelectorAll('button.yqc-chip'));
+          if (items.length === 0) return;
+
+          let isRtl = false;
+          try {
+            isRtl = getComputedStyle(host).direction === 'rtl';
+          } catch {
+            isRtl = false;
+          }
+
+          const nextKey = isRtl ? 'ArrowLeft' : 'ArrowRight';
+          const prevKey = isRtl ? 'ArrowRight' : 'ArrowLeft';
+          const currentIndex = items.indexOf(target);
+          let nextTarget = null;
+
+          if (event.key === nextKey) {
+            nextTarget = items[currentIndex < 0 ? 0 : (currentIndex + 1) % items.length];
+          } else if (event.key === prevKey) {
+            nextTarget =
+              items[currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length];
+          } else if (event.key === 'Home') {
+            nextTarget = items[0];
+          } else if (event.key === 'End') {
+            nextTarget = items[items.length - 1];
+          } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            const speedChips = Array.from(
+              this.ui?.speedRow?.querySelectorAll('button.yqc-chip') || []
+            );
+            const qualityChips = Array.from(
+              this.ui?.qualityRow?.querySelectorAll('button.yqc-chip') || []
+            );
+            const inSpeed = speedChips.includes(target);
+            const sourceRow = inSpeed ? speedChips : qualityChips;
+            const destRow = inSpeed ? qualityChips : speedChips;
+            if (destRow.length > 0) {
+              const colIdx = Math.max(0, sourceRow.indexOf(target));
+              nextTarget = destRow[Math.min(colIdx, destRow.length - 1)];
             }
+          }
 
-            if (nextIndex !== -1) {
-              event.preventDefault();
-              event.stopPropagation();
-              items[nextIndex].focus();
+          if (nextTarget) {
+            event.preventDefault();
+            event.stopPropagation();
+            for (const item of items) {
+              item.setAttribute('tabindex', item === nextTarget ? '0' : '-1');
             }
-          },
-          { signal }
-        );
-      }
-
-      if (name === 'speed' && customInput && customApplyBtn) {
-        const submitCustom = () => {
-          const parsed = clampSpeed(customInput.value);
-          if (parsed === null) {
-            this.showTooltip('Enter a speed between 0.1x and 16.0x');
-            customInput.focus();
-            return;
+            nextTarget.focus();
           }
-          this.applyPlaybackSpeed(parsed);
-          this.closeDropdown('speed', { returnFocus: true });
-        };
-
-        customApplyBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          submitCustom();
-        }, { signal });
-
-        customInput.addEventListener('keydown', (e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            submitCustom();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            this.closeDropdown('speed', { returnFocus: true });
-          }
-        }, { signal });
-      }
-    }
-
-    positionDropdownFallback(trigger, dropdown) {
-      const supportsCssAnchor =
-        typeof CSS !== 'undefined' &&
-        typeof CSS.supports === 'function' &&
-        CSS.supports('position-area', 'block-end span-inline-end');
-
-      if (supportsCssAnchor && dropdown.hasAttribute('popover')) {
-        dropdown.style.top = '';
-        dropdown.style.left = '';
-        return;
-      }
-
-      try {
-        const tRect = trigger.getBoundingClientRect();
-        const menuHeight = Math.min(dropdown.scrollHeight || 220, 300);
-        const menuWidth = Math.max(dropdown.offsetWidth || 160, 152);
-        const openUpward =
-          this.mode === 'fullscreen' ||
-          (window.innerHeight - tRect.bottom < menuHeight + 12 && tRect.top > menuHeight + 12);
-
-        const rawTop = openUpward ? tRect.top - menuHeight - 6 : tRect.bottom + 6;
-        const clampedTop = Math.max(8, Math.min(rawTop, Math.max(8, window.innerHeight - menuHeight - 8)));
-        const clampedLeft = Math.max(8, Math.min(tRect.left, Math.max(8, window.innerWidth - menuWidth - 8)));
-
-        dropdown.style.top = `${Math.round(clampedTop)}px`;
-        dropdown.style.left = `${Math.round(clampedLeft)}px`;
-      } catch {
-        // Safe no-op in layoutless test environments.
-      }
-    }
-
-    closeDropdown(name, { returnFocus = false } = {}) {
-      const control = this.ui?.[name];
-      if (!control) return;
-      const { trigger, dropdown, supportsPopover } = control;
-
-      if (supportsPopover) {
-        try {
-          if (dropdown.matches(':popover-open')) {
-            dropdown.hidePopover();
-          }
-        } catch {
-          // Ignore if already hidden/detached.
-        }
-      } else {
-        dropdown.hidden = true;
-      }
-
-      trigger.setAttribute('aria-expanded', 'false');
-      if (this.openDropdownName === name) {
-        this.openDropdownName = null;
-      }
-      if (returnFocus) {
-        trigger.focus();
-      }
-    }
-
-    isDropdownOpen(name) {
-      const control = this.ui?.[name];
-      if (!control) return false;
-      if (control.supportsPopover) {
-        try {
-          return control.dropdown.matches(':popover-open');
-        } catch {
-          return false;
-        }
-      }
-      return !control.dropdown.hidden;
-    }
-
-    closeAllDropdowns({ returnFocus = false } = {}) {
-      const namesToClose = new Set();
-      if (this.openDropdownName) {
-        namesToClose.add(this.openDropdownName);
-      }
-      for (const candidate of ['speed', 'quality']) {
-        if (this.isDropdownOpen(candidate)) {
-          namesToClose.add(candidate);
-        }
-      }
-      for (const candidate of namesToClose) {
-        this.closeDropdown(candidate, { returnFocus });
-      }
+        },
+        { signal }
+      );
     }
 
     getAvailableRates() {
@@ -1307,49 +1111,69 @@
       return Array.from(merged).sort((a, b) => a - b);
     }
 
-    renderSpeedMenu() {
-      const control = this.ui?.speed;
-      if (!control) return;
+    renderSpeedRow() {
+      const speedRow = this.ui?.speedRow;
+      if (!speedRow) return;
 
       const currentRate = clampSpeed(this.videoEl?.playbackRate ?? 1.0) ?? 1.0;
       const rates = this.getAvailableRates();
-      const useFallbackMenuRoles =
-        typeof HTMLElement !== 'undefined' && !('focusGroup' in HTMLElement.prototype);
+      const existingButtons = Array.from(speedRow.querySelectorAll('button.yqc-chip-speed'));
+      const canUpdateInPlace =
+        existingButtons.length === rates.length &&
+        existingButtons.every((btn, idx) => btn.dataset.yqcRate === String(rates[idx]));
 
-      control.menuList.replaceChildren();
-      for (const rate of rates) {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'yqc-menu-item';
-        item.dataset.yqcRate = String(rate);
-        if (useFallbackMenuRoles) {
-          item.setAttribute('role', 'menuitem');
+      if (canUpdateInPlace) {
+        for (let idx = 0; idx < existingButtons.length; idx += 1) {
+          const btn = existingButtons[idx];
+          const isActive = Math.abs(rates[idx] - currentRate) < 0.005;
+          btn.classList.toggle('yqc-is-active', isActive);
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         }
-
-        const isActive = Math.abs(rate - currentRate) < 0.005;
-        if (isActive) {
-          item.classList.add('yqc-is-active');
-          item.setAttribute('aria-current', 'true');
-        }
-
-        const textSpan = document.createElement('span');
-        textSpan.textContent = formatRate(rate);
-        const checkSpan = document.createElement('span');
-        checkSpan.className = 'yqc-menu-check';
-        checkSpan.setAttribute('aria-hidden', 'true');
-        checkSpan.textContent = '✓';
-
-        item.append(textSpan, checkSpan);
-        item.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.applyPlaybackSpeed(rate);
-          this.closeDropdown('speed', { returnFocus: true });
-        });
-        control.menuList.appendChild(item);
+        return;
       }
 
-      if (control.customInput) {
-        control.customInput.value = String(currentRate);
+      const focusedRate =
+        document.activeElement && speedRow.contains(document.activeElement)
+          ? document.activeElement.dataset?.yqcRate || null
+          : null;
+
+      speedRow.replaceChildren();
+      let restoredFocusBtn = null;
+
+      for (const rate of rates) {
+        const label = formatRate(rate);
+        const isActive = Math.abs(rate - currentRate) < 0.005;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'yqc-chip yqc-chip-speed';
+        btn.dataset.yqcRate = String(rate);
+        btn.textContent = label;
+        btn.title = `Playback speed ${label}`;
+        btn.setAttribute('aria-label', `Playback speed ${label}`);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        if (isActive) {
+          btn.classList.add('yqc-is-active');
+        }
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (btn.getAttribute('aria-disabled') === 'true') return;
+          this.applyPlaybackSpeed(rate);
+        });
+
+        speedRow.appendChild(btn);
+        if (focusedRate && btn.dataset.yqcRate === focusedRate) {
+          restoredFocusBtn = btn;
+        }
+      }
+
+      if (restoredFocusBtn) {
+        restoredFocusBtn.focus();
+      }
+      this.syncRovingTabIndex(this.hostEl);
+      if (this.hostEl?.isConnected && this.activeAnchor) {
+        this.alignHostWithAnchor(this.hostEl, this.activeAnchor);
       }
     }
 
@@ -1383,81 +1207,145 @@
     }
 
     syncSpeedUi(rate) {
-      const valid = clampSpeed(rate) ?? 1.0;
-      const control = this.ui?.speed;
-      if (!control) return;
-
-      control.labelSpan.textContent = formatRate(valid);
-      this.renderSpeedMenu();
+      if (!this.ui?.speedRow) return;
+      if (clampSpeed(rate) === null) return;
+      this.renderSpeedRow();
     }
 
-    getQualityDisplayLabel() {
-      const q = this.qualityState;
-      if (q.isLoading && q.options.length === 0) {
-        return 'Loading...';
+    getQualitySlots(q) {
+      const slots = STANDARD_QUALITY_SLOTS.map((slot) => ({ ...slot }));
+      const standardSet = new Set(STANDARD_QUALITY_SLOTS.map((slot) => slot.quality));
+      const extras = (q.options || [])
+        .filter((opt) => opt && opt.quality && !standardSet.has(opt.quality))
+        .sort((a, b) => (QUALITY_RANK[a.quality] || 99) - (QUALITY_RANK[b.quality] || 99));
+
+      for (const opt of extras) {
+        const compact =
+          opt.quality === 'highres'
+            ? '4320p'
+            : String(opt.label || opt.quality).replace(/\s*\([^)]*\)$/, '').trim();
+        slots.push({
+          quality: opt.quality,
+          label: compact || opt.quality,
+          isAutoOption: Boolean(opt.isAutoOption)
+        });
       }
-      if (q.isAuto && q.autoAvailable) {
-        return q.currentLabel && q.currentLabel !== 'Auto' ? `Auto (${q.currentLabel})` : 'Auto';
-      }
-      return q.currentLabel || 'Auto';
+      return slots;
     }
 
-    renderQualityMenu() {
-      const control = this.ui?.quality;
-      if (!control) return;
+    renderQualityRow() {
+      const qualityRow = this.ui?.qualityRow;
+      if (!qualityRow) return;
 
       const q = this.qualityState;
-      const useFallbackMenuRoles =
-        typeof HTMLElement !== 'undefined' && !('focusGroup' in HTMLElement.prototype);
+      const slots = this.getQualitySlots(q);
+      const byQuality = new Map((q.options || []).map((opt) => [opt.quality, opt]));
+      const showLoadingStatus = Boolean(q.isLoading && (!q.options || q.options.length === 0));
 
-      control.labelSpan.textContent = this.getQualityDisplayLabel();
-      control.trigger.setAttribute('aria-busy', this.isQualitySwitching ? 'true' : 'false');
-      control.menuList.replaceChildren();
+      qualityRow.setAttribute('aria-busy', this.isQualitySwitching ? 'true' : 'false');
 
-      if (!q.options || q.options.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'yqc-menu-empty';
-        empty.textContent = q.isLoading ? 'Loading available qualities...' : 'No quality options available';
-        control.menuList.appendChild(empty);
+      if (this.ui.qualityStatus) {
+        this.ui.qualityStatus.hidden = !showLoadingStatus;
+        this.ui.qualityStatus.textContent = showLoadingStatus ? 'Loading…' : '';
+      }
+
+      const existingButtons = Array.from(qualityRow.querySelectorAll('button.yqc-chip-quality'));
+      const canUpdateInPlace =
+        existingButtons.length === slots.length &&
+        existingButtons.every((btn, idx) => btn.dataset.yqcQuality === slots[idx].quality);
+
+      const applySlotProps = (btn, slot) => {
+        const opt = byQuality.get(slot.quality) || null;
+        const isAvailable = Boolean(opt);
+        const isActive =
+          isAvailable &&
+          (slot.isAutoOption ? Boolean(q.isAuto) : !q.isAuto && q.currentQuality === slot.quality);
+        const isPending = this.isQualitySwitching && this.pendingQualityTarget === slot.quality;
+
+        btn.classList.toggle('yqc-is-active', isActive);
+        btn.classList.toggle('yqc-is-pending', isPending);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+
+        if (isAvailable) {
+          btn.removeAttribute('aria-disabled');
+        } else {
+          btn.setAttribute('aria-disabled', 'true');
+        }
+
+        if (slot.isAutoOption) {
+          if (!isAvailable) {
+            const msg = showLoadingStatus ? 'Auto (Loading…)' : 'Auto quality unavailable';
+            btn.title = msg;
+            btn.setAttribute('aria-label', msg);
+          } else if (isActive && q.currentLabel && q.currentLabel !== 'Auto') {
+            btn.title = `Auto (${q.currentLabel})`;
+            btn.setAttribute('aria-label', `Auto quality (currently ${q.currentLabel})`);
+          } else {
+            btn.title = 'Auto quality';
+            btn.setAttribute('aria-label', 'Auto quality');
+          }
+        } else if (isAvailable) {
+          const fullLabel = opt.label || slot.label;
+          btn.title = fullLabel;
+          btn.setAttribute('aria-label', `Video quality ${fullLabel}`);
+        } else {
+          btn.title = showLoadingStatus ? `${slot.label} (Loading…)` : `${slot.label} (Unavailable)`;
+          btn.setAttribute('aria-label', `Video quality ${slot.label} unavailable`);
+        }
+      };
+
+      if (canUpdateInPlace) {
+        for (let idx = 0; idx < existingButtons.length; idx += 1) {
+          applySlotProps(existingButtons[idx], slots[idx]);
+        }
         return;
       }
 
-      for (const opt of q.options) {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'yqc-menu-item';
-        item.dataset.yqcQuality = opt.quality;
-        if (useFallbackMenuRoles) {
-          item.setAttribute('role', 'menuitem');
-        }
+      const focusedQuality =
+        document.activeElement && qualityRow.contains(document.activeElement)
+          ? document.activeElement.dataset?.yqcQuality || null
+          : null;
 
-        const isActive = opt.isAutoOption
-          ? Boolean(q.isAuto)
-          : !q.isAuto && q.currentQuality === opt.quality;
+      for (const oldBtn of existingButtons) {
+        oldBtn.remove();
+      }
 
-        if (isActive) {
-          item.classList.add('yqc-is-active');
-          item.setAttribute('aria-current', 'true');
-        }
+      let restoredFocusBtn = null;
+      const statusNode = this.ui.qualityStatus || null;
 
-        const textSpan = document.createElement('span');
-        textSpan.textContent =
-          opt.isAutoOption && q.isAuto && q.currentLabel && q.currentLabel !== 'Auto'
-            ? `Auto (${q.currentLabel})`
-            : opt.label;
+      for (const slot of slots) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'yqc-chip yqc-chip-quality';
+        btn.dataset.yqcQuality = slot.quality;
+        btn.textContent = slot.label;
+        applySlotProps(btn, slot);
 
-        const checkSpan = document.createElement('span');
-        checkSpan.className = 'yqc-menu-check';
-        checkSpan.setAttribute('aria-hidden', 'true');
-        checkSpan.textContent = '✓';
-
-        item.append(textSpan, checkSpan);
-        item.addEventListener('click', (e) => {
+        btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          void this.applyVideoQuality(opt.quality, { markManual: true });
-          this.closeDropdown('quality', { returnFocus: true });
+          if (btn.getAttribute('aria-disabled') === 'true' || this.isQualitySwitching) {
+            return;
+          }
+          void this.applyVideoQuality(slot.quality, { markManual: true });
         });
-        control.menuList.appendChild(item);
+
+        if (statusNode && statusNode.parentElement === qualityRow) {
+          qualityRow.insertBefore(btn, statusNode);
+        } else {
+          qualityRow.appendChild(btn);
+        }
+
+        if (focusedQuality && slot.quality === focusedQuality) {
+          restoredFocusBtn = btn;
+        }
+      }
+
+      if (restoredFocusBtn) {
+        restoredFocusBtn.focus();
+      }
+      this.syncRovingTabIndex(this.hostEl);
+      if (this.hostEl?.isConnected && this.activeAnchor) {
+        this.alignHostWithAnchor(this.hostEl, this.activeAnchor);
       }
     }
 
@@ -1467,11 +1355,11 @@
         ...this.qualityState,
         ...nextState
       };
-      this.renderQualityMenu();
+      this.renderQualityRow();
 
       const nextRatesKey = JSON.stringify(this.qualityState.preferredRates || []);
       if (nextRatesKey !== prevRatesKey) {
-        this.renderSpeedMenu();
+        this.renderSpeedRow();
       }
     }
 
@@ -1497,7 +1385,8 @@
 
       const previousState = { ...this.qualityState };
       this.isQualitySwitching = true;
-      this.renderQualityMenu();
+      this.pendingQualityTarget = targetQuality;
+      this.renderQualityRow();
 
       try {
         const result = await this.bridge.request(
@@ -1507,6 +1396,7 @@
         );
 
         this.isQualitySwitching = false;
+        this.pendingQualityTarget = null;
 
         if (result?.applied && result?.state) {
           this.mergePlayerState(result.state);
@@ -1524,6 +1414,7 @@
         return false;
       } catch (error) {
         this.isQualitySwitching = false;
+        this.pendingQualityTarget = null;
         if (error?.isNavigationAbort) {
           return false;
         }
@@ -1629,7 +1520,7 @@
     }
 
     unmountControls() {
-      this.closeAllDropdowns({ returnFocus: false });
+      this.pendingQualityTarget = null;
       this.stopFullscreenKeepalive();
       this.clearQualityTimers();
       clearTimeout(this.tooltipTimer);

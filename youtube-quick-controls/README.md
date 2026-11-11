@@ -1,26 +1,26 @@
 # YouTube Quick Controls
 
-A lightweight **Manifest V3 Chrome Extension** that adds compact, native-styled **Playback Speed** (`[ 1.0x ▼ ]`) and **Video Quality** (`[ 1080p ▼ ]`) dropdown pills directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts** — eliminating nested gear-menu clicks without intercepting network streams or modifying native YouTube buttons.
+A lightweight **Manifest V3 Chrome Extension** that adds two compact horizontal rows of **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill buttons directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts** — eliminating dropdowns and nested gear-menu clicks without intercepting network streams or modifying native YouTube buttons.
 
 ---
 
 ## Features
 
-- **Directly Above the Like Button:** Anchors cleanly above YouTube's action bar aligned with the Like button, adapting automatically to horizontal or wrapped action layouts.
-- **Instant Playback Speed Control:**
-  - Standard presets: `0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, `2.0x`, `2.25x`, `2.5x`, `3.0x`.
-  - Automatically merges custom speeds exposed by YouTube (`getAvailablePlaybackRates()`) plus an inline custom speed input (`0.1x`–`16.0x`).
-  - Applies immediately via `video.playbackRate` without pausing, seeking, or restarting playback.
+- **Directly Above the Like Button (Two Compact Horizontal Rows):** Anchors cleanly above YouTube's action bar aligned with the Like button:
+  - **Row 1 – Playback Speed:** `[ 0.25x ] [ 0.5x ] [ 0.75x ] [ 1.0x ] [ 1.25x ] [ 1.5x ] [ 1.75x ] [ 2.0x ] [ 2.5x ] [ 3.0x ]`
+  - **Row 2 – Video Quality:** `[ Auto ] [ 144p ] [ 240p ] [ 360p ] [ 480p ] [ 720p ] [ 1080p ] [ 1440p ] [ 2160p ]`
+- **One-Click Instant Playback Speed Control:**
+  - Standard presets: `0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, `2.0x`, `2.5x`, `3.0x` (plus any additional speeds exposed dynamically by YouTube or set externally/via popup).
+  - Applies immediately in a single click via `video.playbackRate` without pausing, seeking, or restarting playback, highlighting the active speed pill (`aria-pressed="true"`).
   - Stays bidirectionally synced when speed is changed via YouTube shortcuts (`Shift+>` / `Shift+<`) or native controls.
-- **Dynamic Video Quality Control:**
-  - Queries only resolutions actually available for the current video (`144p` through `2160p (4K)` + `4320p (8K)` if present, and `Auto` when supported).
-  - Never lists unplayable or unavailable resolutions.
-  - Verifies quality switches with YouTube's player API before updating the badge; if YouTube cannot apply a resolution, keeps the previous quality visible, displays a subtle warning tooltip (`⚠`), and falls back cleanly.
-  - Handles still-loading video manifests and live quality transitions.
+- **Dynamic One-Click Video Quality Control:**
+  - Displays standard resolution pills alongside `Auto` (and `4320p` when available), dynamically disabling (`aria-disabled="true"`) unavailable or still-loading options so unavailable resolutions are never selectable.
+  - Verifies quality switches with YouTube's player API before highlighting the newly active pill; if YouTube cannot apply a resolution, keeps the previous quality active, displays a subtle warning tooltip (`⚠`), and falls back cleanly.
+  - Handles still-loading video manifests (with an inline `Loading…` status indicator) and live quality transitions.
 - **Fullscreen Support (Critical Mode):**
   - Renders inside `document.fullscreenElement` so controls remain visible in Chrome's Fullscreen Top Layer.
   - Places controls directly above the fullscreen Like button in modern YouTube fullscreen layouts (`.ytp-fullscreen-quick-actions`), with a non-overlapping overlay fallback above `.ytp-chrome-bottom` in classic layouts.
-  - Prevents click-through pause/play, hotkey leakage (`Space` / arrows), menu clipping, and idle auto-hide while interacting with dropdowns.
+  - Prevents click-through pause/play, hotkey leakage (`Space` / arrows), pill clipping, and idle auto-hide while interacting with the toolbar.
 - **YouTube SPA & Shorts Support:**
   - Tracks `yt-navigate-start`, `yt-navigate-finish`, `yt-page-data-updated`, `popstate`, active Shorts reel attributes (`ytd-reel-video-renderer[is-active]`), and DOM mutations with debouncing and `AbortController` teardown to prevent duplicate buttons or leaks.
 - **Dark & Light Theme Adaptation + Persistent Settings:**
@@ -36,7 +36,7 @@ youtube-quick-controls/
 ├── manifest.json       # MV3 configuration & dual-world content script registration
 ├── page-bridge.js      # MAIN-world YouTube player API RPC bridge
 ├── content.js          # ISOLATED-world UI injection, speed/quality logic & SPA router
-├── styles.css          # Native pill/dropdown styles, Light/Dark theme & fullscreen rules
+├── styles.css          # Native two-row pill styles, Light/Dark theme & fullscreen rules
 ├── background.js       # MV3 service worker seeding default settings
 ├── popup.html          # Extension settings popup markup
 ├── popup.css           # Adaptive Light/Dark popup styles
@@ -71,15 +71,15 @@ YouTube Quick Controls solves this using a three-layer strategy:
    - **Modern Fullscreen Overlay (`.ytp-fullscreen-quick-actions`):** Locates the fullscreen Like button inside `document.fullscreenElement`, mounts `#yqc-controls-host` directly inside the Top Layer `#movie_player` container (so `overflow: hidden` on `.ytp-fullscreen-quick-actions` cannot clip pills or menus), and aligns it directly above the fullscreen Like button's coordinates via `getBoundingClientRect()` + `ResizeObserver`. If bounding layout is temporarily unmeasured, it falls back inline before the Like button inside `.ytp-fullscreen-quick-actions`.
    - **Classic Fullscreen Fallback:** When `.ytp-fullscreen-quick-actions` is absent, mounts inside `document.fullscreenElement` above `.ytp-chrome-bottom` (`.yqc-fullscreen-overlay-slot`) clear of playback/scrubber/right controls.
 3. **Interactive Guardrails:**
-   - Dropdown popups use the HTML Popover API (`popover="auto"`) + viewport-clamped positioning opening **upward** in fullscreen so options remain clickable without bottom-edge clipping.
+   - Accessible `role="toolbar"` container wrapping `role="group"` speed and quality rows with `focusgroup="toolbar wrap"` (plus roving-`tabindex` arrow-key fallback) and full Light/Dark theme + high-contrast (`forced-colors`) adaptation.
    - Pointer/keyboard propagation inside `#yqc-controls-host` is stopped (`stopPropagation()`) so clicks do not toggle play/pause and arrow keys/`Space` do not trigger YouTube hotkeys.
-   - Hovering controls or opening a menu triggers a lightweight `.ytp-autohide` keepalive so YouTube does not fade controls away mid-selection.
+   - Hovering or focusing controls triggers a lightweight `.ytp-autohide` keepalive so YouTube does not fade controls away mid-selection.
 
 ---
 
 ## Known Limitations of YouTube's Quality API
 
 - **Unlisted / Deprecated Internal APIs:** YouTube deprecated official programmatic quality overrides in the public IFrame API. Quality discovery (`getAvailableQualityLevels`, `getAvailableQualityData`) and switching (`setPlaybackQualityRange`, `setPlaybackQuality`) rely on internal `#movie_player` / `#shorts-player` methods in the `MAIN` world, which YouTube can change across player updates.
-- **Adaptive Bitrate (ABR) Buffer Delay:** Calling `setPlaybackQualityRange()` asks YouTube's ABR engine to prefer the selected resolution for upcoming segments, rather than rewriting or flushing already-buffered media chunks (because the extension intentionally does **not** intercept or modify network requests). High-buffer videos may take a few seconds before `getPlaybackQuality()` reports the new resolution; if the player refuses or retains another tier after verification, the UI preserves the active state and displays a subtle warning tooltip.
-- **Initial Loading Window:** While a video's DASH manifest is still initializing, YouTube may temporarily return an empty list or only low-tier qualities; the extension displays `Loading...` and refreshes automatically once `onStateChange` / manifest polling delivers the full resolution list.
-- **Shorts & Premium-Locked Tiers:** Many YouTube Shorts expose a single fixed quality or omit quality tiers altogether (`getAvailableQualityLevels()` may be empty on some Shorts builds). Options marked unplayable by YouTube (such as locked Premium bitrates when `isPlayable === false`) are filtered out rather than presented as broken buttons.
+- **Adaptive Bitrate (ABR) Buffer Delay:** Calling `setPlaybackQualityRange()` asks YouTube's ABR engine to prefer the selected resolution for upcoming segments, rather than rewriting or flushing already-buffered media chunks (because the extension intentionally does **not** intercept or modify network requests). High-buffer videos may take a few seconds before `getPlaybackQuality()` reports the new resolution; if the player refuses or retains another tier after verification, the UI preserves the active pill and displays a subtle warning tooltip.
+- **Initial Loading Window:** While a video's DASH manifest is still initializing, YouTube may temporarily return an empty list or only low-tier qualities; the extension displays `Loading…` while disabling unready pills and refreshes automatically once `onStateChange` / manifest polling delivers the full resolution list.
+- **Shorts & Premium-Locked Tiers:** Many YouTube Shorts expose a single fixed quality or omit quality tiers altogether (`getAvailableQualityLevels()` may be empty on some Shorts builds). Options unavailable or marked unplayable by YouTube (such as locked Premium bitrates when `isPlayable === false`) are disabled (`aria-disabled="true"`) and ignore clicks rather than behaving as broken controls.

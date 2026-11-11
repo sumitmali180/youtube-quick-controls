@@ -74,13 +74,25 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   }
 
   const stylesCss = readExtFile('styles.css');
-  assert.equal(
-    /@supports \(position-area: block-end span-inline-end\)[\s\S]*inset: auto;/.test(stylesCss),
-    true,
-    'inset: auto must be gated inside @supports (position-area: ...)'
-  );
-  const unconditionalBlock = stylesCss.split('@supports (position-area:')[0];
-  assert.equal(/\binset:\s*auto\b/.test(unconditionalBlock), false, 'inset: auto must not appear unconditionally on [popover]');
+  assert.match(stylesCss, /\.yqc-row\b/, 'styles.css must style compact .yqc-row containers');
+  assert.match(stylesCss, /\.yqc-chip\[aria-pressed='true'\]/, 'styles.css must style active state directly from [aria-pressed="true"]');
+  assert.match(stylesCss, /\.yqc-chip\[aria-disabled='true'\]/, 'styles.css must style disabled state directly from [aria-disabled="true"]');
+  assert.match(stylesCss, /:focus-visible/, 'styles.css must define :focus-visible styles');
+  assert.match(stylesCss, /@media \(hover: hover\)/, 'styles.css must gate :hover inside @media (hover: hover)');
+  assert.match(stylesCss, /@media \(prefers-reduced-motion: no-preference\)/, 'styles.css must gate transitions inside prefers-reduced-motion');
+  assert.match(stylesCss, /@media \(pointer: coarse\)/, 'styles.css must enlarge touch targets under coarse pointers');
+  assert.match(stylesCss, /@media \(forced-colors: active\)/, 'styles.css must define forced-colors high contrast rules');
+  assert.equal(/popover|inset:\s*auto/.test(stylesCss), false, 'styles.css must not contain dropdown/popover rules');
+
+  const contentJs = readExtFile('content.js');
+  assert.match(contentJs, /'role', 'toolbar'/);
+  assert.match(contentJs, /'focusgroup', 'toolbar wrap'/);
+  assert.match(contentJs, /'role', 'group'/);
+  assert.match(contentJs, /'aria-pressed'/);
+  assert.match(contentJs, /'aria-disabled', 'true'/);
+  assert.equal(/showPopover|hidePopover/.test(contentJs), false, 'content.js must not use popovers in two-row pill UI');
+  assert.match(contentJs, /const STANDARD_SPEEDS = \[0\.25, 0\.5, 0\.75, 1\.0, 1\.25, 1\.5, 1\.75, 2\.0, 2\.5, 3\.0\]/);
+  assert.match(contentJs, /hd2160.*label:\s*'2160p'/);
 
   const popupCss = readExtFile('popup.css');
   assert.match(popupCss, /color-scheme:\s*light dark/);
