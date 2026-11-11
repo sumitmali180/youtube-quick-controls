@@ -56,9 +56,9 @@
       (mode === 'auto' && typeof location === 'object' && location.pathname.startsWith('/shorts'));
 
     if (isShortsRoute) {
-      const activeReelPlayer = document.querySelector(
-        'ytd-reel-video-renderer[is-active] #shorts-player, ytd-reel-video-renderer[is-active] .html5-video-player'
-      );
+      const activeReelPlayer =
+        document.querySelector('ytd-reel-video-renderer[is-active] #shorts-player') ||
+        document.querySelector('ytd-reel-video-renderer[is-active] .html5-video-player');
       if (activeReelPlayer) {
         return activeReelPlayer;
       }

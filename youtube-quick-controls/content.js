@@ -260,6 +260,7 @@
       this.qualityPollTimers = [];
       this.tooltipTimer = null;
       this.isInternalRateChange = false;
+      this.expectedInternalRate = null;
       this.isQualitySwitching = false;
       this.manualSpeedOverride = false;
       this.manualQualityOverride = false;
@@ -454,16 +455,18 @@
      */
     findActiveVideo(mode = this.mode) {
       if (mode === 'shorts') {
-        const activeShortsVideo = document.querySelector(
-          'ytd-reel-video-renderer[is-active] video, #shorts-player video'
-        );
+        const activeShortsVideo =
+          document.querySelector('ytd-reel-video-renderer[is-active] video') ||
+          document.querySelector('#shorts-player video');
         if (activeShortsVideo) return activeShortsVideo;
       }
       if (document.fullscreenElement) {
         const fsVideo = document.fullscreenElement.querySelector('video');
         if (fsVideo) return fsVideo;
       }
-      const playerVideo = document.querySelector('#movie_player video, video.html5-main-video');
+      const playerVideo =
+        document.querySelector('#movie_player video') ||
+        document.querySelector('video.html5-main-video');
       if (playerVideo) return playerVideo;
       return document.querySelector('video');
     }
@@ -487,9 +490,20 @@
       this.videoEl.addEventListener(
         'ratechange',
         () => {
-          if (this.isInternalRateChange) return;
+          const currentRate = this.videoEl.playbackRate;
+          if (
+            this.isInternalRateChange &&
+            this.expectedInternalRate !== null &&
+            Math.abs(currentRate - this.expectedInternalRate) < 0.005
+          ) {
+            this.isInternalRateChange = false;
+            this.expectedInternalRate = null;
+            return;
+          }
+          this.isInternalRateChange = false;
+          this.expectedInternalRate = null;
           this.manualSpeedOverride = true;
-          this.syncSpeedUi(this.videoEl.playbackRate);
+          this.syncSpeedUi(currentRate);
         },
         { signal }
       );
@@ -753,6 +767,7 @@
 
     ensureMounted() {
       if (!this.settingsStore.settings.enabled) {
+        this.bindVideoElement(null);
         this.unmountControls();
         return false;
       }
@@ -766,6 +781,7 @@
       const anchor = this.resolveAnchor(this.mode);
       if (!anchor) {
         if (this.mode === 'other') {
+          this.bindVideoElement(null);
           this.unmountControls();
         }
         return false;
@@ -920,7 +936,11 @@
       document.addEventListener(
         'keydown',
         (event) => {
-          if (event.key === 'Escape' && this.openDropdownName) {
+          if (event.key !== 'Escape') return;
+          const hasOpenMenu =
+            Boolean(this.openDropdownName) ||
+            ['speed', 'quality'].some((candidate) => this.isDropdownOpen(candidate));
+          if (hasOpenMenu) {
             event.preventDefault();
             event.stopPropagation();
             this.closeAllDropdowns({ returnFocus: true });
@@ -1042,6 +1062,10 @@
       const { trigger, dropdown, menuList, customInput, customApplyBtn, supportsPopover, supportsInvoker } = control;
 
       const handleOpen = () => {
+        if (this.openDropdownName === name) {
+          this.positionDropdownFallback(trigger, dropdown);
+          return;
+        }
         if (this.openDropdownName && this.openDropdownName !== name) {
           this.closeDropdown(this.openDropdownName, { returnFocus: false });
         }
@@ -1057,20 +1081,36 @@
       };
 
       const handleClose = () => {
+        const wasTrackedOpen =
+          this.openDropdownName === name || trigger.getAttribute('aria-expanded') === 'true';
         if (this.openDropdownName === name) {
           this.openDropdownName = null;
         }
         trigger.setAttribute('aria-expanded', 'false');
-        this.stopFullscreenKeepalive();
+        if (wasTrackedOpen) {
+          this.stopFullscreenKeepalive();
+        }
       };
 
       if (supportsPopover) {
         dropdown.addEventListener(
-          'toggle',
+          'beforetoggle',
           (event) => {
             if (event.newState === 'open') {
               handleOpen();
             } else {
+              handleClose();
+            }
+          },
+          { signal }
+        );
+        dropdown.addEventListener(
+          'toggle',
+          (event) => {
+            const isActuallyOpen = this.isDropdownOpen(name);
+            if (event.newState === 'open' && isActuallyOpen) {
+              handleOpen();
+            } else if (event.newState === 'closed' && !isActuallyOpen) {
               handleClose();
             }
           },
@@ -1224,9 +1264,31 @@
       }
     }
 
+    isDropdownOpen(name) {
+      const control = this.ui?.[name];
+      if (!control) return false;
+      if (control.supportsPopover) {
+        try {
+          return control.dropdown.matches(':popover-open');
+        } catch {
+          return false;
+        }
+      }
+      return !control.dropdown.hidden;
+    }
+
     closeAllDropdowns({ returnFocus = false } = {}) {
+      const namesToClose = new Set();
       if (this.openDropdownName) {
-        this.closeDropdown(this.openDropdownName, { returnFocus });
+        namesToClose.add(this.openDropdownName);
+      }
+      for (const candidate of ['speed', 'quality']) {
+        if (this.isDropdownOpen(candidate)) {
+          namesToClose.add(candidate);
+        }
+      }
+      for (const candidate of namesToClose) {
+        this.closeDropdown(candidate, { returnFocus });
       }
     }
 
@@ -1302,19 +1364,19 @@
       if (video) {
         this.bindVideoElement(video);
         this.isInternalRateChange = true;
+        this.expectedInternalRate = targetRate;
         try {
           // Mutate playbackRate directly without pausing or seeking.
           video.playbackRate = targetRate;
         } finally {
           setTimeout(() => {
-            this.isInternalRateChange = false;
+            if (this.expectedInternalRate === targetRate) {
+              this.isInternalRateChange = false;
+              this.expectedInternalRate = null;
+            }
           }, 50);
         }
       }
-
-      void this.bridge
-        .request('YQC_REQ_SET_RATE', { mode: this.mode, rate: targetRate }, 800)
-        .catch(() => {});
 
       this.syncSpeedUi(video ? video.playbackRate : targetRate);
       return true;
