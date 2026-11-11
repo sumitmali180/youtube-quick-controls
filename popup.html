@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Quick Controls</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup-root">
+    <header class="popup-header">
+      <div class="brand-mark" aria-hidden="true">▶</div>
+      <div class="header-text">
+        <h1>YouTube Quick Controls</h1>
+        <p>Speed &amp; quality pills above the Like button</p>
+      </div>
+    </header>
+
+    <section class="settings-card" aria-label="Extension settings">
+      <div class="setting-row toggle-row">
+        <div class="setting-copy">
+          <label for="setting-enabled" class="setting-title">Enable quick controls</label>
+          <span class="setting-hint">Show speed and quality pills on watch, fullscreen, and Shorts</span>
+        </div>
+        <input type="checkbox" id="setting-enabled" class="yqc-switch" checked>
+      </div>
+
+      <div class="setting-row toggle-row">
+        <div class="setting-copy">
+          <label for="setting-auto-apply" class="setting-title">Auto-apply on new videos</label>
+          <span class="setting-hint">Apply your defaults automatically when a video loads</span>
+        </div>
+        <input type="checkbox" id="setting-auto-apply" class="yqc-switch" checked>
+      </div>
+
+      <div class="setting-row field-row">
+        <label for="setting-default-speed" class="setting-title">Default playback speed</label>
+        <div class="speed-input-group">
+          <select id="setting-default-speed" class="yqc-select">
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1.0x (Normal)</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="1.75">1.75x</option>
+            <option value="2">2.0x</option>
+            <option value="2.25">2.25x</option>
+            <option value="2.5">2.5x</option>
+            <option value="3">3.0x</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <div id="custom-speed-wrap" class="custom-speed-wrap" hidden>
+            <label for="setting-custom-speed" class="sr-only">Custom speed multiplier</label>
+            <input
+              type="number"
+              id="setting-custom-speed"
+              class="yqc-number"
+              min="0.1"
+              max="16"
+              step="0.05"
+              value="1.0"
+              aria-label="Custom playback speed"
+            >
+            <button type="button" id="apply-custom-speed" class="yqc-btn-secondary">Set</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-row field-row">
+        <label for="setting-default-quality" class="setting-title">Default video quality</label>
+        <select id="setting-default-quality" class="yqc-select">
+          <option value="auto" selected>Auto (Best adaptive)</option>
+          <option value="hd2160">2160p (4K)</option>
+          <option value="hd1440">1440p</option>
+          <option value="hd1080">1080p</option>
+          <option value="hd720">720p</option>
+          <option value="large">480p</option>
+          <option value="medium">360p</option>
+          <option value="small">240p</option>
+          <option value="tiny">144p</option>
+        </select>
+      </div>
+    </section>
+
+    <footer class="popup-footer">
+      <div id="status-banner" class="status-banner" role="status" aria-live="polite" data-tone="neutral">
+        <span class="status-icon" aria-hidden="true">✓</span>
+        <span class="status-text">Ready</span>
+      </div>
+      <button type="button" id="reset-defaults" class="yqc-btn-ghost">Reset defaults</button>
+    </footer>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

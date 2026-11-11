@@ -1,0 +1,300 @@
+/* YouTube Quick Controls — Two-row inline toolbar styling */
+
+.yqc-root {
+  --yqc-bg: rgba(0, 0, 0, 0.05);
+  --yqc-bg-hover: rgba(0, 0, 0, 0.1);
+  --yqc-border: rgba(0, 0, 0, 0.12);
+  --yqc-disabled-border: rgba(0, 0, 0, 0.18);
+  --yqc-fg: var(--yt-spec-text-primary, #0f0f0f);
+  --yqc-fg-muted: var(--yt-spec-text-secondary, #606060);
+  --yqc-active-bg: var(--yt-spec-text-primary, #0f0f0f);
+  --yqc-active-fg: var(--yt-spec-base-background, #ffffff);
+  --yqc-active-border: transparent;
+  --yqc-focus-ring: #065fd4;
+  --yqc-bar-bg: transparent;
+  --yqc-bar-shadow: none;
+  --yqc-tooltip-bg: #282828;
+  --yqc-tooltip-fg: #f1f1f1;
+
+  color-scheme: light;
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+  font-family: "Roboto", "YouTube Sans", Arial, sans-serif;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+/* YouTube Dark Theme */
+html[dark] .yqc-root,
+ytd-app[dark] .yqc-root,
+[dark] .yqc-root {
+  --yqc-bg: rgba(255, 255, 255, 0.1);
+  --yqc-bg-hover: rgba(255, 255, 255, 0.2);
+  --yqc-border: rgba(255, 255, 255, 0.16);
+  --yqc-disabled-border: rgba(255, 255, 255, 0.24);
+  --yqc-fg: var(--yt-spec-text-primary, #f1f1f1);
+  --yqc-fg-muted: rgba(255, 255, 255, 0.62);
+  --yqc-active-bg: var(--yt-spec-text-primary, #f1f1f1);
+  --yqc-active-fg: #0f0f0f;
+  --yqc-active-border: transparent;
+  --yqc-focus-ring: #3ea6ff;
+
+  color-scheme: dark;
+}
+
+/* Watch & Modern Fullscreen Toolbar Row Wrapper */
+.yqc-actions-column {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  row-gap: 6px !important;
+}
+
+.yqc-actions-column > .yqc-root {
+  order: -2 !important;
+  flex: 0 0 auto;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+}
+
+.yqc-actions-column::before {
+  content: '';
+  order: -1;
+  flex: 0 0 100%;
+  block-size: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.yqc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+.yqc-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 24px;
+  min-block-size: 24px;
+  padding-block: 2px;
+  padding-inline: 7px;
+  margin: 0;
+  border: 1px solid var(--yqc-border);
+  border-radius: 999px;
+  background-color: var(--yqc-bg);
+  color: var(--yqc-fg);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .yqc-chip {
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease,
+      opacity 120ms ease;
+  }
+}
+
+@media (hover: hover) {
+  .yqc-chip:not([aria-disabled='true']):not([aria-pressed='true']):hover {
+    background-color: var(--yqc-bg-hover);
+  }
+}
+
+.yqc-chip:focus-visible {
+  outline: 2px solid var(--yqc-focus-ring);
+  outline-offset: 2px;
+}
+
+.yqc-chip[aria-pressed='true'] {
+  background-color: var(--yqc-active-bg);
+  color: var(--yqc-active-fg);
+  border-color: var(--yqc-active-border);
+  font-weight: 600;
+}
+
+.yqc-chip[aria-disabled='true'] {
+  border-style: dashed;
+  border-color: var(--yqc-disabled-border);
+  color: var(--yqc-fg-muted);
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.yqc-chip.yqc-is-pending {
+  border-color: var(--yqc-focus-ring);
+}
+
+.yqc-row-status {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--yqc-fg-muted);
+  padding-inline: 4px;
+  white-space: nowrap;
+}
+
+.yqc-row-status[hidden] {
+  display: none !important;
+}
+
+/* Error / Fallback Tooltip */
+.yqc-tooltip {
+  position: absolute;
+  inset-block-end: calc(100% + 6px);
+  inset-inline-start: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-inline-size: 280px;
+  padding-block: 6px;
+  padding-inline: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: var(--yqc-tooltip-bg);
+  color: var(--yqc-tooltip-fg);
+  font-size: 11px;
+  line-height: 1.35;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42);
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+.yqc-tooltip[hidden] {
+  display: none !important;
+}
+
+/* Fullscreen & Shorts High-Contrast Scrim */
+.yqc-root[data-yqc-mode='fullscreen'],
+.yqc-root[data-yqc-mode='shorts'] {
+  --yqc-bg: rgba(255, 255, 255, 0.12);
+  --yqc-bg-hover: rgba(255, 255, 255, 0.24);
+  --yqc-border: rgba(255, 255, 255, 0.2);
+  --yqc-disabled-border: rgba(255, 255, 255, 0.26);
+  --yqc-fg: #f1f1f1;
+  --yqc-fg-muted: rgba(255, 255, 255, 0.65);
+  --yqc-active-bg: #ffffff;
+  --yqc-active-fg: #0f0f0f;
+  --yqc-active-border: transparent;
+  --yqc-focus-ring: #3ea6ff;
+
+  color-scheme: dark;
+  padding: 5px 6px;
+  border-radius: 12px;
+  background-color: rgba(15, 15, 15, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
+}
+
+.yqc-root[data-yqc-mode='fullscreen'][data-yqc-fs-placement='above-like'] {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-end: 64px;
+  z-index: 75;
+}
+
+.yqc-root[data-yqc-mode='fullscreen'][data-yqc-fs-placement='classic-overlay'] {
+  position: absolute;
+  inset-inline-end: 16px;
+  inset-block-end: 64px;
+  z-index: 75;
+}
+
+.yqc-root[data-yqc-mode='fullscreen'][data-yqc-fs-placement='quick-actions-inline'] {
+  margin-block-end: 2px;
+}
+
+.yqc-fullscreen-overlay-slot {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-end: 8px;
+  vertical-align: middle;
+}
+
+/* Shorts Mode */
+.yqc-root[data-yqc-mode='shorts'] {
+  position: relative;
+  z-index: 50;
+  margin-block-end: 8px;
+  max-inline-size: min(360px, 100%);
+}
+
+/* Idle Auto-Hide & Fullscreen Chrome Auto-Hide */
+@media (prefers-reduced-motion: no-preference) {
+  .yqc-root {
+    transition: opacity 140ms ease-out;
+  }
+
+  .yqc-root[data-yqc-idle='true']:not(:has(:focus-visible)),
+  #movie_player.ytp-autohide .yqc-root[data-yqc-mode='fullscreen']:not(:hover):not(:has(:focus-visible)):not([data-yqc-open='true']) {
+    transition: opacity 280ms ease-in;
+  }
+}
+
+.yqc-root[data-yqc-idle='true']:not(:has(:focus-visible)),
+#movie_player.ytp-autohide .yqc-root[data-yqc-mode='fullscreen']:not(:hover):not(:has(:focus-visible)):not([data-yqc-open='true']) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Larger touch targets for coarse pointers */
+@media (pointer: coarse) {
+  .yqc-chip {
+    min-inline-size: 36px;
+    min-block-size: 36px;
+    padding-block: 4px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+}
+
+/* Windows High Contrast / Forced Colors */
+@media (forced-colors: active) {
+  .yqc-chip {
+    background-color: ButtonFace;
+    color: ButtonText;
+    border: 1px solid ButtonText;
+    forced-color-adjust: auto;
+  }
+
+  .yqc-chip[aria-pressed='true'] {
+    background-color: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+
+  .yqc-chip[aria-disabled='true'] {
+    color: GrayText;
+    border-color: GrayText;
+    border-style: dashed;
+    opacity: 1;
+  }
+
+  .yqc-tooltip {
+    background-color: Canvas;
+    color: CanvasText;
+    border: 1px solid CanvasText;
+  }
+}
