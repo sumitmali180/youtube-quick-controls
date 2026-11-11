@@ -5,10 +5,10 @@ current_phase: 4
 current_phase_name: Documentation, Automated Test Suite & End-to-End Verification
 status: completed
 stopped_at: Completed Phase 4 (04-01 Verification, Docs & Bug-Fix Pass)
-last_updated: "2026-11-11T15:23:52.819Z"
+last_updated: "2026-11-11T15:30:53.953Z"
 last_activity: 2026-11-11
-last_activity_desc: "Completed quick task 261111-sph: Replace dropdowns with two compact horizontal pill rows for playback speed and video quality"
-state_head: 22d7ff7ab3f94859a3b8c3ffc615eca8df9bc908
+last_activity_desc: "Completed quick task 261111-t2f: Add idle auto-hide behavior on player hover and mouse movement"
+state_head: b6c4335550ddcc9eb2a8b089190d57b4766d5646
 progress:
   total_phases: 4
   completed_phases: 4
@@ -32,7 +32,7 @@ See: `.planning/PROJECT.md` (updated 2026-11-11)
 Phase: 4 of 4 (Documentation, Automated Test Suite & End-to-End Verification)
 Plan: 1 of 1 in current phase
 Status: Complete
-Last activity: 2026-11-11 - Completed quick task 261111-sph: Replace dropdowns with two compact horizontal pill rows for playback speed and video quality
+Last activity: 2026-11-11 - Completed quick task 261111-t2f: Add idle auto-hide behavior on player hover and mouse movement
 
 Progress: [██████████] 100%
 
@@ -74,6 +74,7 @@ None (automated Chrome 156 verification ran via local HTTP/CDP fixture harness b
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 261111-sph | Replace dropdowns with two compact horizontal pill rows for playback speed and video quality | 2026-11-11 | 22d7ff7 | [261111-sph-replace-dropdowns-with-two-compact-horiz](./quick/261111-sph-replace-dropdowns-with-two-compact-horiz/) |
+| 261111-t2f | Add idle auto-hide behavior on player hover and mouse movement | 2026-11-11 | b6c4335 | [261111-t2f-add-idle-auto-hide-behavior-on-player-ho](./quick/261111-t2f-add-idle-auto-hide-behavior-on-player-ho/) |
 
 ## Session Continuity
 
