@@ -7,11 +7,11 @@
 
 ### Extension Foundation & Dual-World Bridge
 
-- [ ] **FOUND-01**: Extension uses valid Manifest V3 (`manifest_version: 3`) in self-contained `youtube-quick-controls/` directory ready for Chrome "Load unpacked".
-- [ ] **FOUND-02**: Requests strictly minimal permissions (`"storage"`) and scopes content scripts to `https://www.youtube.com/*`; includes real valid PNG icons (`16`, `48`, `128`).
-- [ ] **FOUND-03**: Communicates between `world: "MAIN"` (`page-bridge.js`) and `world: "ISOLATED"` (`content.js`) via source/origin-verified `window.postMessage` RPC without CSP/Trusted Types violations or inline `<script>` tags.
-- [ ] **FOUND-04**: Never intercepts or modifies YouTube network requests, media streams, or native YouTube Like/Dislike button click handlers.
-- [ ] **FOUND-05**: Includes MV3 background service worker (`background.js`) registering synchronous top-level listeners (`onInstalled`, `onMessage`) and seeding default preferences without relying on in-memory globals.
+- [x] **FOUND-01**: Extension uses valid Manifest V3 (`manifest_version: 3`) in self-contained `youtube-quick-controls/` directory ready for Chrome "Load unpacked".
+- [x] **FOUND-02**: Requests strictly minimal permissions (`"storage"`) and scopes content scripts to `https://www.youtube.com/*`; includes real valid PNG icons (`16`, `48`, `128`).
+- [x] **FOUND-03**: Communicates between `world: "MAIN"` (`page-bridge.js`) and `world: "ISOLATED"` (`content.js`) via source/origin-verified `window.postMessage` RPC without CSP/Trusted Types violations or inline `<script>` tags.
+- [x] **FOUND-04**: Never intercepts or modifies YouTube network requests, media streams, or native YouTube Like/Dislike button click handlers.
+- [x] **FOUND-05**: Includes MV3 background service worker (`background.js`) registering synchronous top-level listeners (`onInstalled`, `onMessage`) and seeding default preferences without relying on in-memory globals.
 
 ### Playback Speed Control
 
@@ -47,8 +47,8 @@
 
 ### Settings, Persistence & Auto-Apply
 
-- [ ] **SET-01**: Provides `popup.html`, `popup.css`, and `popup.js` configuring: Enable/Disable controls, Default playback speed, Default video quality, and Auto-apply defaults on new videos.
-- [ ] **SET-02**: Persists settings in `chrome.storage.sync` (with `chrome.storage.local` fallback if sync fails) with defaults `{ enabled: true, defaultSpeed: 1.0, defaultQuality: "auto", autoApply: true }`, and reacts live via `chrome.storage.onChanged`.
+- [x] **SET-01**: Provides `popup.html`, `popup.css`, and `popup.js` configuring: Enable/Disable controls, Default playback speed, Default video quality, and Auto-apply defaults on new videos.
+- [x] **SET-02**: Persists settings in `chrome.storage.sync` (with `chrome.storage.local` fallback if sync fails) with defaults `{ enabled: true, defaultSpeed: 1.0, defaultQuality: "auto", autoApply: true }`, and reacts live via `chrome.storage.onChanged`.
 - [ ] **SET-03**: When enabled and `autoApply` is true, automatically applies saved default speed and best matching available default quality to newly loaded videos without throwing errors if preferred resolution exceeds video max.
 
 ### Documentation & Verification

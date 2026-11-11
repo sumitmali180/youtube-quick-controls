@@ -6,7 +6,7 @@ Build a production-ready Manifest V3 Chrome extension inside `youtube-quick-cont
 
 ## Phases
 
-- [ ] **Phase 1: Extension Foundation, Storage & Dual-World Bridge** - MV3 manifest, icons, service worker, popup settings UI, and CSP-safe `MAIN`/`ISOLATED` player RPC bridge.
+- [x] **Phase 1: Extension Foundation, Storage & Dual-World Bridge** - MV3 manifest, icons, service worker, popup settings UI, and CSP-safe `MAIN`/`ISOLATED` player RPC bridge.
 - [ ] **Phase 2: Watch-Page Controls, Playback Speed & Dynamic Quality Engine** - Anchor injection above watch-page Like button, speed/quality pill UI, `ratechange` sync, custom rates, verified quality switching with rollback/tooltip, and dark/light theme support.
 - [ ] **Phase 3: Fullscreen Mode, YouTube Shorts & SPA Lifecycle** - `document.fullscreenElement` Top-Layer anchoring (modern Delhi + classic fallback), Shorts active reel binding, SPA navigation teardown/re-injection, and auto-apply defaults.
 - [ ] **Phase 4: Documentation, Automated Test Suite & End-to-End Verification** - Comprehensive README docs, automated unit/DOM/chrome verification tests, bug-fix pass, and final GSD verification/UAT signoff.
@@ -24,7 +24,7 @@ Build a production-ready Manifest V3 Chrome extension inside `youtube-quick-cont
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — MV3 manifest, PNG icons, service worker, popup UI + storage layer, and dual-world `page-bridge.js` RPC contract
+- [x] 01-01-PLAN.md — MV3 manifest, PNG icons, service worker, popup UI + storage layer, and dual-world `page-bridge.js` RPC contract
 
 ### Phase 2: Watch-Page Controls, Playback Speed & Dynamic Quality Engine
 **Goal**: Inject compact native-feeling `[ 1.0x ▼ ] [ 1080p ▼ ]` controls directly above YouTube's Like button on standard watch pages with full playback speed sync, custom rate support, dynamic quality discovery/application with verification/fallback, and Light/Dark theme matching.
@@ -70,7 +70,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Extension Foundation, Storage & Dual-World Bridge | 0/1 | Planned | - |
+| 1. Foundation & Bridge | 1/1 | Complete | 2026-11-11 |
 | 2. Watch-Page Controls, Playback Speed & Dynamic Quality Engine | 0/1 | Planned | - |
 | 3. Fullscreen Mode, YouTube Shorts & SPA Lifecycle | 0/1 | Planned | - |
 | 4. Documentation, Automated Test Suite & End-to-End Verification | 0/1 | Planned | - |
