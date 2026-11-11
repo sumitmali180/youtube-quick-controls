@@ -15,27 +15,27 @@
 
 ### Playback Speed Control
 
-- [ ] **SPEED-01**: Displays a compact pill dropdown trigger (`[ 1.0x ▼ ]`) showing the active video's current playback speed.
-- [ ] **SPEED-02**: Provides all standard presets (`0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, `2.0x`, `2.25x`, `2.5x`, `3.0x`) and highlights the currently active speed.
-- [ ] **SPEED-03**: Selecting a speed immediately sets `video.playbackRate` without pausing, seeking, or restarting the video.
-- [ ] **SPEED-04**: Synchronizes displayed speed bidirectionally on HTML5 `<video>` `ratechange` events (including changes from YouTube native controls or keyboard shortcuts like `Shift+>` / `Shift+<`) without feedback loops.
-- [ ] **SPEED-05**: Supports custom playback rates exposed by YouTube / active playbackRate (e.g., slider/custom rate values such as `1.15x`) and allows applying custom rates safely.
+- [x] **SPEED-01**: Displays a compact pill dropdown trigger (`[ 1.0x ▼ ]`) showing the active video's current playback speed.
+- [x] **SPEED-02**: Provides all standard presets (`0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, `2.0x`, `2.25x`, `2.5x`, `3.0x`) and highlights the currently active speed.
+- [x] **SPEED-03**: Selecting a speed immediately sets `video.playbackRate` without pausing, seeking, or restarting the video.
+- [x] **SPEED-04**: Synchronizes displayed speed bidirectionally on HTML5 `<video>` `ratechange` events (including changes from YouTube native controls or keyboard shortcuts like `Shift+>` / `Shift+<`) without feedback loops.
+- [x] **SPEED-05**: Supports custom playback rates exposed by YouTube / active playbackRate (e.g., slider/custom rate values such as `1.15x`) and allows applying custom rates safely.
 
 ### Video Quality Control
 
-- [ ] **QUAL-01**: Dynamically queries available resolutions from YouTube's player API (`getAvailableQualityLevels` / `getAvailableQualityData` across `#movie_player` / `#shorts-player`) and never shows unavailable resolutions as selectable options.
-- [ ] **QUAL-02**: Displays human-readable resolution labels (`144p`, `240p`, `360p`, `480p`, `720p`, `1080p`, `1440p`, `2160p (4K)`, etc.) and supports `Auto` when available (including showing active auto-resolved resolution where known).
-- [ ] **QUAL-03**: Selecting a resolution invokes `setPlaybackQualityRange` (with `setPlaybackQuality` fallback) cleanly, without network interception.
-- [ ] **QUAL-04**: Verifies quality changes via player events/queries; never falsely marks an unapplied quality as active, and on rejection/failure keeps previous visible quality selected while displaying a subtle non-color-only error message/tooltip and graceful fallback.
-- [ ] **QUAL-05**: Handles videos that are still loading, videos with limited resolutions (e.g., 360p/480p max), and updates displayed quality dynamically when YouTube changes quality (`onPlaybackQualityChange`).
+- [x] **QUAL-01**: Dynamically queries available resolutions from YouTube's player API (`getAvailableQualityLevels` / `getAvailableQualityData` across `#movie_player` / `#shorts-player`) and never shows unavailable resolutions as selectable options.
+- [x] **QUAL-02**: Displays human-readable resolution labels (`144p`, `240p`, `360p`, `480p`, `720p`, `1080p`, `1440p`, `2160p (4K)`, etc.) and supports `Auto` when available (including showing active auto-resolved resolution where known).
+- [x] **QUAL-03**: Selecting a resolution invokes `setPlaybackQualityRange` (with `setPlaybackQuality` fallback) cleanly, without network interception.
+- [x] **QUAL-04**: Verifies quality changes via player events/queries; never falsely marks an unapplied quality as active, and on rejection/failure keeps previous visible quality selected while displaying a subtle non-color-only error message/tooltip and graceful fallback.
+- [x] **QUAL-05**: Handles videos that are still loading, videos with limited resolutions (e.g., 360p/480p max), and updates displayed quality dynamically when YouTube changes quality (`onPlaybackQualityChange`).
 
 ### UI/UX & Watch-Page Placement
 
-- [ ] **UI-01**: Injects two compact pill dropdowns directly **above** YouTube's Like button on standard watch pages, aligned cleanly with the existing video action toolbar without modifying YouTube's native buttons or causing layout breaks.
-- [ ] **UI-02**: Dropdown menus feature YouTube-compatible dark/light styling (`#282828` menu surface in dark mode, light surface in light mode), rounded corners, subtle borders/shadows, smooth hover states, clear active highlight, and scrollable list when tall.
-- [ ] **UI-03**: Dropdowns close cleanly on outside click, pressing `Escape`, or opening the sibling dropdown, and never clip offscreen (viewport-aware upward/flip positioning).
-- [ ] **UI-04**: Adapts dynamically to YouTube's Light and Dark themes (`html[dark]` / `ytd-app[dark]` + fullscreen dark player context), independent of OS color-scheme mismatch.
-- [ ] **UI-05**: Accessible keyboard navigation (`ArrowUp`/`ArrowDown`/`Home`/`End`, `Escape` focus return), `>= 24x24` CSS px hit targets, and visible `:focus-visible` rings without consuming YouTube hotkeys globally or pausing playback when clicked.
+- [x] **UI-01**: Injects two compact pill dropdowns directly **above** YouTube's Like button on standard watch pages, aligned cleanly with the existing video action toolbar without modifying YouTube's native buttons or causing layout breaks.
+- [x] **UI-02**: Dropdown menus feature YouTube-compatible dark/light styling (`#282828` menu surface in dark mode, light surface in light mode), rounded corners, subtle borders/shadows, smooth hover states, clear active highlight, and scrollable list when tall.
+- [x] **UI-03**: Dropdowns close cleanly on outside click, pressing `Escape`, or opening the sibling dropdown, and never clip offscreen (viewport-aware upward/flip positioning).
+- [x] **UI-04**: Adapts dynamically to YouTube's Light and Dark themes (`html[dark]` / `ytd-app[dark]` + fullscreen dark player context), independent of OS color-scheme mismatch.
+- [x] **UI-05**: Accessible keyboard navigation (`ArrowUp`/`ArrowDown`/`Home`/`End`, `Escape` focus return), `>= 24x24` CSS px hit targets, and visible `:focus-visible` rings without consuming YouTube hotkeys globally or pausing playback when clicked.
 
 ### Fullscreen, Shorts & SPA Lifecycle
 
