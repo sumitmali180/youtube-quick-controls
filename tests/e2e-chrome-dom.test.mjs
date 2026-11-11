@@ -708,6 +708,35 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.ok(fsDelhi.hostBottom <= fsDelhi.fsLikeTop + 2, `Fullscreen controls must sit directly ABOVE fullscreen Like button (${fsDelhi.hostBottom} <= ${fsDelhi.fsLikeTop})`);
     assert.equal(fsDelhi.autohideOpacity, '1', 'Hovered controls must remain visible even if .ytp-autohide toggles');
 
+    // Auto-hide check inside Fullscreen Top Layer: pointerleave -> ~2.5s idle fade -> mousemove wake
+    const fsIdleRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
+      const host = document.getElementById('yqc-controls-host');
+      const fsEl = document.fullscreenElement;
+      fsEl.classList.remove('ytp-autohide');
+      host.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 2900));
+      const hiddenState = {
+        idleAttr: host.dataset.yqcIdle,
+        opacity: getComputedStyle(host).opacity,
+        pointerEvents: getComputedStyle(host).pointerEvents
+      };
+      fsEl.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      const syncClear = host.dataset.yqcIdle;
+      await new Promise(r => setTimeout(r, 200));
+      return {
+        hiddenState,
+        syncClear,
+        restoredOpacity: getComputedStyle(host).opacity,
+        restoredPointerEvents: getComputedStyle(host).pointerEvents
+      };
+    })()`);
+    assert.equal(fsIdleRes.hiddenState.idleAttr, 'true');
+    assert.equal(fsIdleRes.hiddenState.opacity, '0', 'Fullscreen controls must smoothly fade out after ~2.5s idle');
+    assert.equal(fsIdleRes.hiddenState.pointerEvents, 'none');
+    assert.equal(fsIdleRes.syncClear, undefined, 'Mouse movement on fullscreen player must immediately clear idle state');
+    assert.equal(fsIdleRes.restoredOpacity, '1');
+    assert.equal(fsIdleRes.restoredPointerEvents, 'auto');
+
     // Classic Fullscreen fallback test (remove .ytp-fullscreen-quick-actions)
     const fsClassic = await evalInPage(chrome.cdp, sessionId, `(() => {
       const qa = document.querySelector('.ytp-fullscreen-quick-actions');
@@ -738,6 +767,68 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(postFsWatch.fs, null);
     assert.equal(postFsWatch.hostCount, 1);
     assert.equal(postFsWatch.mode, 'watch');
+
+    // 4b. Normal Watch-mode Auto-Hide: ~2.5s idle fade -> #movie_player mousemove instant wake -> hover interaction hold
+    const watchIdleRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
+      const host = document.getElementById('yqc-controls-host');
+      const player = document.getElementById('movie_player');
+      player.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      const visibleImmediately = {
+        idleAttr: host.dataset.yqcIdle,
+        opacity: getComputedStyle(host).opacity
+      };
+
+      // Idle 2.9s (2.5s delay + 280ms CSS fade-out) -> faded out cleanly with zero click interception
+      await new Promise(r => setTimeout(r, 2900));
+      const afterIdle = {
+        idleAttr: host.dataset.yqcIdle,
+        opacity: getComputedStyle(host).opacity,
+        pointerEvents: getComputedStyle(host).pointerEvents
+      };
+
+      // Instant reappear on mouse move over player
+      player.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      const wakeIdleAttr = host.dataset.yqcIdle;
+      await new Promise(r => setTimeout(r, 200));
+      const afterWakeOpacity = getComputedStyle(host).opacity;
+
+      // Hovering over either control row keeps controls visible past idle window
+      host.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 2650));
+      const whileHoveredOpacity = getComputedStyle(host).opacity;
+      const whileHoveredIdle = host.dataset.yqcIdle;
+
+      // Leaving controls resumes idle countdown and hides smoothly again
+      host.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 2900));
+      const afterLeaveOpacity = getComputedStyle(host).opacity;
+
+      // Wake once more before next step
+      player.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 200));
+
+      return {
+        visibleImmediately,
+        afterIdle,
+        wakeIdleAttr,
+        afterWakeOpacity,
+        whileHoveredOpacity,
+        whileHoveredIdle,
+        afterLeaveOpacity,
+        postWakeOpacity: getComputedStyle(host).opacity
+      };
+    })()`);
+    assert.equal(watchIdleRes.visibleImmediately.idleAttr, undefined);
+    assert.equal(watchIdleRes.visibleImmediately.opacity, '1');
+    assert.equal(watchIdleRes.afterIdle.idleAttr, 'true');
+    assert.equal(watchIdleRes.afterIdle.opacity, '0', 'Normal mode controls must smoothly fade out after ~2.5s idle');
+    assert.equal(watchIdleRes.afterIdle.pointerEvents, 'none');
+    assert.equal(watchIdleRes.wakeIdleAttr, undefined, 'Mousemove on YouTube player must immediately clear idle state');
+    assert.equal(watchIdleRes.afterWakeOpacity, '1');
+    assert.equal(watchIdleRes.whileHoveredOpacity, '1', 'Hovering controls must keep both rows visible');
+    assert.equal(watchIdleRes.whileHoveredIdle, undefined);
+    assert.equal(watchIdleRes.afterLeaveOpacity, '0', 'Controls must fade out after leaving rows and staying idle');
+    assert.equal(watchIdleRes.postWakeOpacity, '1');
 
     // 5. Shorts, SPA navigation, Auto-apply & Dark/Light theme styling on inline pill rows
     const spaThemeRes = await evalInPage(chrome.cdp, sessionId, `(async () => {

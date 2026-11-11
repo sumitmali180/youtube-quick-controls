@@ -25,6 +25,8 @@
   max-inline-size: 100%;
   box-sizing: border-box;
   font-family: "Roboto", "YouTube Sans", Arial, sans-serif;
+  opacity: 1;
+  pointer-events: auto;
   z-index: 20;
 }
 
@@ -211,7 +213,6 @@ ytd-app[dark] .yqc-root,
   inset-inline-start: 12px;
   inset-block-end: 64px;
   z-index: 75;
-  pointer-events: auto;
 }
 
 .yqc-root[data-yqc-mode='fullscreen'][data-yqc-fs-placement='classic-overlay'] {
@@ -219,11 +220,9 @@ ytd-app[dark] .yqc-root,
   inset-inline-end: 16px;
   inset-block-end: 64px;
   z-index: 75;
-  pointer-events: auto;
 }
 
 .yqc-root[data-yqc-mode='fullscreen'][data-yqc-fs-placement='quick-actions-inline'] {
-  pointer-events: auto;
   margin-block-end: 2px;
 }
 
@@ -234,24 +233,30 @@ ytd-app[dark] .yqc-root,
   vertical-align: middle;
 }
 
-/* Respect YouTube fullscreen chrome auto-hide when controls are idle */
-#movie_player.ytp-autohide .yqc-root[data-yqc-mode='fullscreen']:not(:hover):not(:focus-within):not([data-yqc-open='true']) {
-  opacity: 0;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .yqc-root[data-yqc-mode='fullscreen'] {
-    transition: opacity 160ms ease;
-  }
-}
-
 /* Shorts Mode */
 .yqc-root[data-yqc-mode='shorts'] {
   position: relative;
   z-index: 50;
   margin-block-end: 8px;
   max-inline-size: min(360px, 100%);
+}
+
+/* Idle Auto-Hide & Fullscreen Chrome Auto-Hide */
+@media (prefers-reduced-motion: no-preference) {
+  .yqc-root {
+    transition: opacity 140ms ease-out;
+  }
+
+  .yqc-root[data-yqc-idle='true']:not(:has(:focus-visible)),
+  #movie_player.ytp-autohide .yqc-root[data-yqc-mode='fullscreen']:not(:hover):not(:has(:focus-visible)):not([data-yqc-open='true']) {
+    transition: opacity 280ms ease-in;
+  }
+}
+
+.yqc-root[data-yqc-idle='true']:not(:has(:focus-visible)),
+#movie_player.ytp-autohide .yqc-root[data-yqc-mode='fullscreen']:not(:hover):not(:has(:focus-visible)):not([data-yqc-open='true']) {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Larger touch targets for coarse pointers */

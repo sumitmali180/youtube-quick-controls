@@ -21,6 +21,9 @@ A lightweight **Manifest V3 Chrome Extension** that adds two compact horizontal 
   - Renders inside `document.fullscreenElement` so controls remain visible in Chrome's Fullscreen Top Layer.
   - Places controls directly above the fullscreen Like button in modern YouTube fullscreen layouts (`.ytp-fullscreen-quick-actions`), with a non-overlapping overlay fallback above `.ytp-chrome-bottom` in classic layouts.
   - Prevents click-through pause/play, hotkey leakage (`Space` / arrows), pill clipping, and idle auto-hide while interacting with the toolbar.
+- **Native Idle Auto-Hide Behavior:**
+  - Automatically fades out both rows smoothly (`opacity: 0`) after ~2.5 seconds of mouse inactivity across normal watch, Shorts, and fullscreen modes without shifting page layout or affecting playback.
+  - Reveals both rows immediately on mouse movement over the player and keeps them visible while hovering, clicking, keyboard-focusing, switching quality, or displaying warning tooltips.
 - **YouTube SPA & Shorts Support:**
   - Tracks `yt-navigate-start`, `yt-navigate-finish`, `yt-page-data-updated`, `popstate`, active Shorts reel attributes (`ytd-reel-video-renderer[is-active]`), and DOM mutations with debouncing and `AbortController` teardown to prevent duplicate buttons or leaks.
 - **Dark & Light Theme Adaptation + Persistent Settings:**

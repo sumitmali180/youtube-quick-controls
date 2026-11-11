@@ -82,9 +82,13 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   assert.match(stylesCss, /@media \(prefers-reduced-motion: no-preference\)/, 'styles.css must gate transitions inside prefers-reduced-motion');
   assert.match(stylesCss, /@media \(pointer: coarse\)/, 'styles.css must enlarge touch targets under coarse pointers');
   assert.match(stylesCss, /@media \(forced-colors: active\)/, 'styles.css must define forced-colors high contrast rules');
+  assert.match(stylesCss, /\.yqc-root\[data-yqc-idle='true'\]:not\(:has\(:focus-visible\)\)/, 'styles.css must fade idle controls while preserving keyboard focus visibility');
+  assert.match(stylesCss, /transition:\s*opacity\s+140ms\s+ease-out/, 'styles.css must define smooth opacity fade-in inside prefers-reduced-motion');
+  assert.match(stylesCss, /transition:\s*opacity\s+280ms\s+ease-in/, 'styles.css must define smooth opacity fade-out inside prefers-reduced-motion');
   assert.equal(/popover|inset:\s*auto/.test(stylesCss), false, 'styles.css must not contain dropdown/popover rules');
 
   const contentJs = readExtFile('content.js');
+  assert.match(contentJs, /const IDLE_HIDE_DELAY_MS = 2500;/);
   assert.match(contentJs, /'role', 'toolbar'/);
   assert.match(contentJs, /'focusgroup', 'toolbar wrap'/);
   assert.match(contentJs, /'role', 'group'/);

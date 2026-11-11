@@ -16,6 +16,8 @@
   const SOURCE_ISOLATED = 'YQC_ISOLATED';
   const SOURCE_MAIN = 'YQC_MAIN';
   const HOST_ID = 'yqc-controls-host';
+  const IDLE_HIDE_DELAY_MS = 2500;
+  const ACTIVITY_THROTTLE_MS = 150;
 
   const DEFAULT_SETTINGS = Object.freeze({
     enabled: true,
@@ -244,6 +246,7 @@
       this.mode = 'watch';
       this.hostEl = null;
       this.controlsAbort = null;
+      this.activityAbort = null;
       this.lifecycleAbort = null;
       this.videoEl = null;
       this.videoAbort = null;
@@ -252,6 +255,14 @@
       this.anchorColumnEl = null;
       this.activeAnchor = null;
       this.debounceTimer = null;
+      this.idleTimer = null;
+      this.idleHideDelayMs = IDLE_HIDE_DELAY_MS;
+      this.isIdleHidden = false;
+      this.isPointerInsideHost = false;
+      this.isPointerDownInsideHost = false;
+      this.isKeyboardFocusedInsideHost = false;
+      this.lastActivityTimestamp = 0;
+      this.isEmittingKeepalive = false;
       this.keepaliveTimer = null;
       this.qualityPollTimers = [];
       this.tooltipTimer = null;
@@ -526,6 +537,9 @@
       );
 
       this.syncSpeedUi(this.videoEl.playbackRate || 1.0);
+      if (this.hostEl?.isConnected) {
+        this.bindActivityTargets();
+      }
     }
 
     /**
@@ -805,12 +819,130 @@
         ) {
           this.activeAnchor = anchor;
           this.alignHostWithAnchor(this.hostEl, anchor);
+          this.bindActivityTargets();
           return true;
         }
       }
 
       this.buildAndAttachHost(anchor);
       return true;
+    }
+
+    clearIdleTimer() {
+      if (this.idleTimer) {
+        clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+      }
+    }
+
+    isInteractionActive() {
+      return Boolean(
+        this.isPointerInsideHost ||
+          this.isPointerDownInsideHost ||
+          this.isKeyboardFocusedInsideHost ||
+          this.isQualitySwitching ||
+          (this.ui?.tooltip && !this.ui.tooltip.hidden)
+      );
+    }
+
+    setIdleHidden(hidden) {
+      this.isIdleHidden = Boolean(hidden);
+      if (!this.hostEl) return;
+      if (this.isIdleHidden) {
+        this.hostEl.dataset.yqcIdle = 'true';
+      } else {
+        delete this.hostEl.dataset.yqcIdle;
+      }
+    }
+
+    scheduleIdleHide() {
+      this.clearIdleTimer();
+      if (!this.hostEl || !this.hostEl.isConnected || this.isInteractionActive()) {
+        return;
+      }
+      const delay = Math.max(0, Number(this.idleHideDelayMs) || IDLE_HIDE_DELAY_MS);
+      this.idleTimer = setTimeout(() => {
+        this.idleTimer = null;
+        if (!this.hostEl || !this.hostEl.isConnected || this.isInteractionActive()) {
+          return;
+        }
+        this.setIdleHidden(true);
+      }, delay);
+    }
+
+    showControlsOnActivity({ force = false } = {}) {
+      if (this.isEmittingKeepalive) return;
+      const now = Date.now();
+      const wasHidden = this.isIdleHidden;
+      if (wasHidden) {
+        this.setIdleHidden(false);
+      }
+      if (force || wasHidden || !this.idleTimer || now - this.lastActivityTimestamp >= ACTIVITY_THROTTLE_MS) {
+        this.lastActivityTimestamp = now;
+        this.scheduleIdleHide();
+      }
+    }
+
+    getPlayerActivityContainers() {
+      const containers = new Set();
+      if (this.activeAnchor?.fsPlayer) {
+        containers.add(this.activeAnchor.fsPlayer);
+      }
+      if (document.fullscreenElement) {
+        containers.add(document.fullscreenElement);
+      }
+      if (this.mode === 'shorts') {
+        const activeReel =
+          document.querySelector('ytd-reel-video-renderer[is-active]') ||
+          document.getElementById('shorts-player')?.closest('ytd-reel-video-renderer');
+        const reelPlayer =
+          activeReel?.querySelector?.('#shorts-player, .html5-video-player, video') || activeReel;
+        if (reelPlayer) {
+          containers.add(reelPlayer);
+        }
+      } else {
+        const moviePlayer = document.querySelector('#movie_player, .html5-video-player');
+        if (moviePlayer) {
+          containers.add(moviePlayer);
+        }
+      }
+      if (this.videoEl) {
+        const closestPlayer = this.videoEl.closest?.('#movie_player, .html5-video-player, #shorts-player');
+        containers.add(closestPlayer || this.videoEl);
+      }
+      if (this.activeAnchor?.mountParent && this.activeAnchor.mountParent !== document.body) {
+        containers.add(this.activeAnchor.mountParent);
+      }
+      return Array.from(containers).filter(Boolean);
+    }
+
+    bindActivityTargets() {
+      if (this.activityAbort) {
+        this.activityAbort.abort();
+        this.activityAbort = null;
+      }
+      if (!this.hostEl || !this.hostEl.isConnected) {
+        return;
+      }
+      this.activityAbort = new AbortController();
+      const { signal } = this.activityAbort;
+      const targets = this.getPlayerActivityContainers();
+
+      const onMove = () => {
+        this.showControlsOnActivity();
+      };
+      const onTouchTap = (event) => {
+        if (event.pointerType === 'touch') {
+          this.showControlsOnActivity({ force: true });
+        }
+      };
+
+      for (const el of targets) {
+        el.addEventListener('mousemove', onMove, { passive: true, signal });
+        el.addEventListener('pointermove', onMove, { passive: true, signal });
+        el.addEventListener('pointerenter', onMove, { passive: true, signal });
+        el.addEventListener('pointerdown', onTouchTap, { passive: true, signal });
+      }
     }
 
     startFullscreenKeepalive() {
@@ -822,11 +954,14 @@
       const fsTarget = this.activeAnchor?.fsPlayer || document.fullscreenElement;
       const pulse = () => {
         if (!fsTarget || !document.fullscreenElement) return;
+        this.isEmittingKeepalive = true;
         try {
           fsTarget.classList?.remove('ytp-autohide');
           fsTarget.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true }));
         } catch {
           // Ignore keepalive pulse errors.
+        } finally {
+          this.isEmittingKeepalive = false;
         }
       };
       pulse();
@@ -890,15 +1025,16 @@
         );
       }
 
-      let isPointerInside = false;
-      const shouldKeepAliveInFullscreen = () =>
-        isPointerInside ||
-        Boolean(document.activeElement && host.contains(document.activeElement));
+      const handleHostEngage = () => {
+        this.setIdleHidden(false);
+        this.clearIdleTimer();
+      };
 
       host.addEventListener(
         'pointerenter',
         () => {
-          isPointerInside = true;
+          this.isPointerInsideHost = true;
+          handleHostEngage();
           if (this.mode === 'fullscreen') {
             this.startFullscreenKeepalive();
           }
@@ -907,19 +1043,69 @@
       );
 
       host.addEventListener(
+        'pointermove',
+        () => {
+          this.isPointerInsideHost = true;
+          handleHostEngage();
+        },
+        { signal }
+      );
+
+      host.addEventListener(
+        'pointerdown',
+        () => {
+          this.isPointerDownInsideHost = true;
+          this.isPointerInsideHost = true;
+          handleHostEngage();
+        },
+        { signal }
+      );
+
+      host.addEventListener(
         'pointerleave',
         () => {
-          isPointerInside = false;
-          if (!shouldKeepAliveInFullscreen()) {
+          this.isPointerInsideHost = false;
+          this.isPointerDownInsideHost = false;
+          if (!this.isKeyboardFocusedInsideHost) {
             this.stopFullscreenKeepalive();
           }
+          this.scheduleIdleHide();
+        },
+        { signal }
+      );
+
+      const clearPointerDown = () => {
+        if (!this.isPointerDownInsideHost) return;
+        this.isPointerDownInsideHost = false;
+        if (!this.isPointerInsideHost && !this.isKeyboardFocusedInsideHost) {
+          this.scheduleIdleHide();
+        }
+      };
+      window.addEventListener('pointerup', clearPointerDown, { signal });
+      window.addEventListener('pointercancel', clearPointerDown, { signal });
+
+      host.addEventListener(
+        'keydown',
+        () => {
+          this.isKeyboardFocusedInsideHost = true;
+          handleHostEngage();
         },
         { signal }
       );
 
       host.addEventListener(
         'focusin',
-        () => {
+        (event) => {
+          let isKeyboardFocus = false;
+          try {
+            isKeyboardFocus = Boolean(!this.isPointerDownInsideHost && event.target?.matches?.(':focus-visible'));
+          } catch {
+            isKeyboardFocus = !this.isPointerDownInsideHost;
+          }
+          if (isKeyboardFocus) {
+            this.isKeyboardFocusedInsideHost = true;
+            handleHostEngage();
+          }
           if (this.mode === 'fullscreen') {
             this.startFullscreenKeepalive();
           }
@@ -934,9 +1120,11 @@
           if (nextFocused && host.contains(nextFocused)) {
             return;
           }
-          if (!isPointerInside) {
+          this.isKeyboardFocusedInsideHost = false;
+          if (!this.isPointerInsideHost) {
             this.stopFullscreenKeepalive();
           }
+          this.scheduleIdleHide();
         },
         { signal }
       );
@@ -1001,6 +1189,9 @@
       this.renderQualityRow();
       this.syncRovingTabIndex(host);
       this.alignHostWithAnchor(host, anchor);
+      this.setIdleHidden(false);
+      this.bindActivityTargets();
+      this.scheduleIdleHide();
     }
 
     syncRovingTabIndex(host = this.hostEl) {
@@ -1368,10 +1559,13 @@
       clearTimeout(this.tooltipTimer);
       this.ui.tooltipText.textContent = message;
       this.ui.tooltip.hidden = false;
+      this.setIdleHidden(false);
+      this.clearIdleTimer();
       this.tooltipTimer = setTimeout(() => {
         if (this.ui?.tooltip) {
           this.ui.tooltip.hidden = true;
         }
+        this.scheduleIdleHide();
       }, 3600);
     }
 
@@ -1386,6 +1580,8 @@
       const previousState = { ...this.qualityState };
       this.isQualitySwitching = true;
       this.pendingQualityTarget = targetQuality;
+      this.setIdleHidden(false);
+      this.clearIdleTimer();
       this.renderQualityRow();
 
       try {
@@ -1400,6 +1596,7 @@
 
         if (result?.applied && result?.state) {
           this.mergePlayerState(result.state);
+          this.scheduleIdleHide();
           return true;
         }
 
@@ -1521,10 +1718,19 @@
 
     unmountControls() {
       this.pendingQualityTarget = null;
+      this.isPointerInsideHost = false;
+      this.isPointerDownInsideHost = false;
+      this.isKeyboardFocusedInsideHost = false;
+      this.isIdleHidden = false;
+      this.clearIdleTimer();
       this.stopFullscreenKeepalive();
       this.clearQualityTimers();
       clearTimeout(this.tooltipTimer);
 
+      if (this.activityAbort) {
+        this.activityAbort.abort();
+        this.activityAbort = null;
+      }
       if (this.resizeObserver) {
         this.resizeObserver.disconnect();
         this.resizeObserver = null;
