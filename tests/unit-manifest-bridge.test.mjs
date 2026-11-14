@@ -74,6 +74,8 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   }
 
   const stylesCss = readExtFile('styles.css');
+  assert.match(stylesCss, /\.yqc-star-btn\b/, 'styles.css must style star trigger button');
+  assert.match(stylesCss, /\.yqc-panel\b/, 'styles.css must style hover-revealed controls panel');
   assert.match(stylesCss, /\.yqc-row\b/, 'styles.css must style compact .yqc-row containers');
   assert.match(stylesCss, /\.yqc-chip\[aria-pressed='true'\]/, 'styles.css must style active state directly from [aria-pressed="true"]');
   assert.match(stylesCss, /\.yqc-chip\[aria-disabled='true'\]/, 'styles.css must style disabled state directly from [aria-disabled="true"]');
@@ -88,6 +90,8 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   assert.equal(/popover|inset:\s*auto/.test(stylesCss), false, 'styles.css must not contain dropdown/popover rules');
 
   const contentJs = readExtFile('content.js');
+  assert.match(contentJs, /yqc-star-btn/, 'content.js must construct star trigger button');
+  assert.match(contentJs, /yqc-controls-panel/, 'content.js must construct controls panel');
   assert.match(contentJs, /const IDLE_HIDE_DELAY_MS = 2500;/);
   assert.match(contentJs, /'role', 'toolbar'/);
   assert.match(contentJs, /'focusgroup', 'toolbar wrap'/);

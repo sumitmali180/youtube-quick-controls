@@ -445,6 +445,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     const watchLayout = await evalInPage(chrome.cdp, sessionId, `(() => {
       const hosts = document.querySelectorAll('#yqc-controls-host');
       const host = hosts[0];
+      const starBtn = document.getElementById('yqc-star-btn');
+      const panel = document.getElementById('yqc-controls-panel');
       const likeBtn = document.getElementById('watch-like-btn');
       const speedRow = document.getElementById('yqc-speed-row');
       const qualityRow = document.getElementById('yqc-quality-row');
@@ -461,6 +463,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       likeBtn.click();
       return {
         hostCount: hosts.length,
+        hasStarBtn: Boolean(starBtn),
+        hasPanel: Boolean(panel),
+        starExpanded: starBtn?.getAttribute('aria-expanded'),
         mode: host.dataset.yqcMode,
         role: host.getAttribute('role'),
         focusgroup: host.getAttribute('focusgroup'),
@@ -484,6 +489,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     })()`);
 
     assert.equal(watchLayout.hostCount, 1);
+    assert.ok(watchLayout.hasStarBtn, 'Host must render star trigger button');
+    assert.ok(watchLayout.hasPanel, 'Host must render controls panel');
+    assert.equal(watchLayout.starExpanded, 'false');
     assert.equal(watchLayout.mode, 'watch');
     assert.equal(watchLayout.role, 'toolbar');
     assert.equal(watchLayout.focusgroup, 'toolbar wrap');
@@ -504,8 +512,26 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     // 2. One-click speed pills, custom YouTube-exposed rate, external ratechange sync, keyboard navigation & propagation isolation
     const speedRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
       const video = document.querySelector('#movie_player video');
+      const host = document.getElementById('yqc-controls-host');
+      const starBtn = document.getElementById('yqc-star-btn');
       const speedRow = document.getElementById('yqc-speed-row');
       const rates = Array.from(speedRow.querySelectorAll('button.yqc-chip')).map(b => Number(b.dataset.yqcRate));
+
+      // Star hover-reveal & pin toggle
+      starBtn.dispatchEvent(new MouseEvent('pointerenter', { bubbles: true }));
+      const afterStarEnter = {
+        revealed: host.dataset.yqcRevealed === 'true',
+        starExpanded: starBtn.getAttribute('aria-expanded')
+      };
+      starBtn.click();
+      const afterStarClick = {
+        pinned: host.dataset.yqcPinned === 'true',
+        starExpanded: starBtn.getAttribute('aria-expanded')
+      };
+      starBtn.click();
+      const afterStarUnclick = {
+        pinned: host.dataset.yqcPinned === 'true'
+      };
 
       // One click directly on 2.5x pill (no dropdown)
       speedRow.querySelector('[data-yqc-rate="2.5"]').click();
@@ -548,6 +574,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
 
       return {
         rates,
+        afterStarEnter,
+        afterStarClick,
+        afterStarUnclick,
         after25,
         afterCustomYt,
         afterExternalCustom,
@@ -560,6 +589,11 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       };
     })()`);
 
+    assert.equal(speedRes.afterStarEnter.revealed, true);
+    assert.equal(speedRes.afterStarEnter.starExpanded, 'true');
+    assert.equal(speedRes.afterStarClick.pinned, true);
+    assert.equal(speedRes.afterStarClick.starExpanded, 'true');
+    assert.equal(speedRes.afterStarUnclick.pinned, false);
     assert.equal(speedRes.rates.includes(2.5), true);
     assert.equal(speedRes.rates.includes(1.15), true);
     assert.equal(speedRes.after25.rate, 2.5);

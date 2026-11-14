@@ -1,12 +1,17 @@
 # YouTube Quick Controls
 
-A lightweight **Manifest V3 Chrome Extension** that adds two compact horizontal rows of **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill buttons directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts** — eliminating dropdowns and nested gear-menu clicks without intercepting network streams or modifying native YouTube buttons.
+A lightweight **Manifest V3 Chrome Extension** that places a compact **Star icon** directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts**. Hovering over the star smoothly reveals two compact horizontal rows of **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill controls — eliminating dropdowns and nested gear-menu clicks without cluttering the player.
 
 ---
 
 ## Features
 
-- **Directly Above the Like Button (Two Compact Horizontal Rows):** Anchors cleanly above YouTube's action bar aligned with the Like button:
+- **Compact Star Button with Smooth Hover-Reveal:**
+  - Displays as a subtle, native-feeling star button (`★`) directly above YouTube's Like button.
+  - Hovering over the star smoothly reveals the two full rows of controls; moving the mouse away smoothly collapses back to the star.
+  - Clicking the star toggles pinning the controls open/closed.
+  - Keyboard accessible: focuses with `Tab`, opens with `Enter` / `Space` / `ArrowRight`, and collapses with `Escape`.
+- **Two Compact Horizontal Rows Above the Like Button:**
   - **Row 1 – Playback Speed:** `[ 0.25x ] [ 0.5x ] [ 0.75x ] [ 1.0x ] [ 1.25x ] [ 1.5x ] [ 1.75x ] [ 2.0x ] [ 2.5x ] [ 3.0x ]`
   - **Row 2 – Video Quality:** `[ Auto ] [ 144p ] [ 240p ] [ 360p ] [ 480p ] [ 720p ] [ 1080p ] [ 1440p ] [ 2160p ]`
 - **One-Click Instant Playback Speed Control:**

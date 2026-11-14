@@ -19,9 +19,9 @@
   color-scheme: light;
   position: relative;
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   max-inline-size: 100%;
   box-sizing: border-box;
   font-family: "Roboto", "YouTube Sans", Arial, sans-serif;
@@ -71,6 +71,103 @@ ytd-app[dark] .yqc-root,
   margin: 0;
   padding: 0;
   pointer-events: none;
+}
+
+/* Star Trigger Button */
+.yqc-star-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 26px;
+  min-block-size: 26px;
+  inline-size: 26px;
+  block-size: 26px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--yqc-border);
+  border-radius: 999px;
+  background-color: var(--yqc-bg);
+  color: var(--yqc-fg);
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.yqc-star-icon {
+  display: block;
+  inline-size: 16px;
+  block-size: 16px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .yqc-star-btn {
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease,
+      transform 120ms ease;
+  }
+}
+
+@media (hover: hover) {
+  .yqc-star-btn:hover {
+    background-color: var(--yqc-bg-hover);
+    color: var(--yqc-fg);
+  }
+}
+
+.yqc-star-btn:focus-visible {
+  outline: 2px solid var(--yqc-focus-ring);
+  outline-offset: 2px;
+}
+
+.yqc-root[data-yqc-revealed='true'] .yqc-star-btn,
+.yqc-root[data-yqc-pinned='true'] .yqc-star-btn,
+.yqc-star-btn[aria-expanded='true'] {
+  background-color: var(--yqc-active-bg);
+  color: var(--yqc-active-fg);
+  border-color: var(--yqc-active-border);
+}
+
+/* Revealed Panel containing Speed and Quality Rows */
+.yqc-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-4px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .yqc-panel {
+    transition:
+      opacity 140ms ease-out,
+      transform 140ms ease-out;
+  }
+}
+
+@media (hover: hover) {
+  .yqc-root:hover .yqc-panel {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+}
+
+.yqc-root[data-yqc-revealed='true'] .yqc-panel,
+.yqc-root[data-yqc-pinned='true'] .yqc-panel,
+.yqc-root:focus-within .yqc-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .yqc-row {
@@ -261,9 +358,12 @@ ytd-app[dark] .yqc-root,
 
 /* Larger touch targets for coarse pointers */
 @media (pointer: coarse) {
-  .yqc-chip {
+  .yqc-chip,
+  .yqc-star-btn {
     min-inline-size: 36px;
     min-block-size: 36px;
+  }
+  .yqc-chip {
     padding-block: 4px;
     padding-inline: 10px;
     font-size: 12px;
@@ -272,14 +372,18 @@ ytd-app[dark] .yqc-root,
 
 /* Windows High Contrast / Forced Colors */
 @media (forced-colors: active) {
-  .yqc-chip {
+  .yqc-chip,
+  .yqc-star-btn {
     background-color: ButtonFace;
     color: ButtonText;
     border: 1px solid ButtonText;
     forced-color-adjust: auto;
   }
 
-  .yqc-chip[aria-pressed='true'] {
+  .yqc-chip[aria-pressed='true'],
+  .yqc-root[data-yqc-revealed='true'] .yqc-star-btn,
+  .yqc-root[data-yqc-pinned='true'] .yqc-star-btn,
+  .yqc-star-btn[aria-expanded='true'] {
     background-color: Highlight;
     color: HighlightText;
     border-color: Highlight;
