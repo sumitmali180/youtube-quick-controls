@@ -5,9 +5,9 @@ current_phase: 4
 current_phase_name: Documentation, Automated Test Suite & End-to-End Verification
 status: completed
 stopped_at: Completed Phase 4 (04-01 Verification, Docs & Bug-Fix Pass)
-last_updated: "2026-11-11T15:30:53.953Z"
-last_activity: 2026-11-11
-last_activity_desc: "Completed quick task 261111-t2f: Add idle auto-hide behavior on player hover and mouse movement"
+last_updated: "2026-11-14T14:53:00.000Z"
+last_activity: 2026-11-14
+last_activity_desc: "Completed quick task 261114-str: Display controls as a compact star icon that reveals the speed and quality rows on hover"
 state_head: b6c4335550ddcc9eb2a8b089190d57b4766d5646
 progress:
   total_phases: 4
@@ -75,6 +75,7 @@ None (automated Chrome 156 verification ran via local HTTP/CDP fixture harness b
 |---|-------------|------|--------|-----------|
 | 261111-sph | Replace dropdowns with two compact horizontal pill rows for playback speed and video quality | 2026-11-11 | 22d7ff7 | [261111-sph-replace-dropdowns-with-two-compact-horiz](./quick/261111-sph-replace-dropdowns-with-two-compact-horiz/) |
 | 261111-t2f | Add idle auto-hide behavior on player hover and mouse movement | 2026-11-11 | b6c4335 | [261111-t2f-add-idle-auto-hide-behavior-on-player-ho](./quick/261111-t2f-add-idle-auto-hide-behavior-on-player-ho/) |
+| 261114-str | Display controls as a compact star icon that reveals the speed and quality rows on hover | 2026-11-14 | 8feb856 | [261114-str-star-hover-reveal-controls](./quick/261114-str-star-hover-reveal-controls/) |
 
 ## Session Continuity
 
