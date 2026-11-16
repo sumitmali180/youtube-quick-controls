@@ -706,7 +706,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     await chrome.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: btnPos.x, y: btnPos.y, button: 'left', clickCount: 1 }, sessionId);
     await new Promise((r) => setTimeout(r, 350));
 
-    const fsDelhi = await evalInPage(chrome.cdp, sessionId, `(() => {
+    const fsDelhi = await evalInPage(chrome.cdp, sessionId, `(async () => {
       const fsEl = document.fullscreenElement;
       const host = document.getElementById('yqc-controls-host');
       const fsLike = fsEl?.querySelector('.ytp-fullscreen-quick-actions button[aria-label*="like" i]');
@@ -716,6 +716,15 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       host?.querySelector('#yqc-speed-row [data-yqc-rate="2"]')?.click();
       const fsRateAfterClick = fsVideo?.playbackRate;
       host?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 300));
+      const activeHRect = host?.getBoundingClientRect();
+      const panelRect = document.getElementById('yqc-controls-panel')?.getBoundingClientRect();
+      console.log('DEBUG fsDelhi:', {
+        hRect,
+        activeHRect,
+        panelRect,
+        dataset: host ? { ...host.dataset } : null
+      });
       fsEl?.classList.add('ytp-autohide');
       const autohideOpacity = host ? getComputedStyle(host).opacity : '';
       return {
@@ -724,11 +733,18 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         hostCount: document.querySelectorAll('#yqc-controls-host').length,
         mode: host?.dataset.yqcMode,
         fsPlacement: host?.dataset.yqcFsPlacement,
-        hostBottom: Math.round(hRect?.bottom || 0),
+        hostBottom: Math.round(activeHRect?.bottom || 0),
         fsLikeTop: Math.round(lRect?.top || 0),
-        visibleWidth: Math.round(hRect?.width || 0),
+        collapsedWidth: Math.round(hRect?.width || 0),
+        visibleWidth: Math.round(activeHRect?.width || 0),
         fsRateAfterClick,
-        autohideOpacity
+        autohideOpacity,
+        debug: {
+          hRect,
+          activeHRect,
+          panelRect,
+          dataset: host ? { ...host.dataset } : null
+        }
       };
     })()`);
 
@@ -737,7 +753,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(fsDelhi.hostCount, 1);
     assert.equal(fsDelhi.mode, 'fullscreen');
     assert.equal(fsDelhi.fsPlacement, 'above-like');
-    assert.ok(fsDelhi.visibleWidth > 50);
+    assert.ok(fsDelhi.collapsedWidth <= 40, 'Fullscreen controls must collapse to compact star shape when not hovered');
+    assert.ok(fsDelhi.visibleWidth > 50, 'Fullscreen controls must expand to full width on hover');
     assert.equal(fsDelhi.fsRateAfterClick, 2, 'Clicking speed chip in fullscreen must immediately change video playbackRate');
     assert.ok(fsDelhi.hostBottom <= fsDelhi.fsLikeTop + 2, `Fullscreen controls must sit directly ABOVE fullscreen Like button (${fsDelhi.hostBottom} <= ${fsDelhi.fsLikeTop})`);
     assert.equal(fsDelhi.autohideOpacity, '1', 'Hovered controls must remain visible even if .ytp-autohide toggles');

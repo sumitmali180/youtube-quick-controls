@@ -21,7 +21,7 @@
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   max-inline-size: 100%;
   box-sizing: border-box;
   font-family: "Roboto", "YouTube Sans", Arial, sans-serif;
@@ -139,43 +139,59 @@ ytd-app[dark] .yqc-root,
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  max-inline-size: 100%;
-  box-sizing: border-box;
+  max-inline-size: 0;
   opacity: 0;
+  overflow: hidden;
   pointer-events: none;
-  transform: translateX(-4px);
+  transform: translateX(-8px);
+  box-sizing: border-box;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .yqc-panel {
     transition:
-      opacity 140ms ease-out,
-      transform 140ms ease-out;
+      max-inline-size 260ms cubic-bezier(0.2, 0, 0, 1),
+      opacity 180ms ease,
+      transform 260ms cubic-bezier(0.2, 0, 0, 1);
   }
 }
 
 @media (hover: hover) {
+  .yqc-root:hover {
+    gap: 6px;
+  }
+
   .yqc-root:hover .yqc-panel {
+    max-inline-size: 800px;
     opacity: 1;
+    overflow: visible;
     pointer-events: auto;
     transform: translateX(0);
   }
 }
 
+.yqc-root[data-yqc-revealed='true'],
+.yqc-root[data-yqc-pinned='true'],
+.yqc-root:focus-within {
+  gap: 6px;
+}
+
 .yqc-root[data-yqc-revealed='true'] .yqc-panel,
 .yqc-root[data-yqc-pinned='true'] .yqc-panel,
 .yqc-root:focus-within .yqc-panel {
+  max-inline-size: 800px;
   opacity: 1;
+  overflow: visible;
   pointer-events: auto;
   transform: translateX(0);
 }
 
 .yqc-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
-  max-inline-size: 100%;
+  inline-size: max-content;
   box-sizing: border-box;
 }
 
@@ -297,12 +313,30 @@ ytd-app[dark] .yqc-root,
   --yqc-focus-ring: #3ea6ff;
 
   color-scheme: dark;
-  padding: 5px 6px;
-  border-radius: 12px;
+  padding: 3px;
+  border-radius: 999px;
   background-color: rgba(15, 15, 15, 0.74);
   border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
+}
+
+@media (hover: hover) {
+  .yqc-root[data-yqc-mode='fullscreen']:hover,
+  .yqc-root[data-yqc-mode='shorts']:hover {
+    padding: 5px 6px;
+    border-radius: 12px;
+  }
+}
+
+.yqc-root[data-yqc-mode='fullscreen'][data-yqc-revealed='true'],
+.yqc-root[data-yqc-mode='fullscreen'][data-yqc-pinned='true'],
+.yqc-root[data-yqc-mode='fullscreen']:focus-within,
+.yqc-root[data-yqc-mode='shorts'][data-yqc-revealed='true'],
+.yqc-root[data-yqc-mode='shorts'][data-yqc-pinned='true'],
+.yqc-root[data-yqc-mode='shorts']:focus-within {
+  padding: 5px 6px;
+  border-radius: 12px;
 }
 
 .yqc-root[data-yqc-mode='fullscreen'][data-yqc-fs-placement='above-like'] {
@@ -341,7 +375,11 @@ ytd-app[dark] .yqc-root,
 /* Idle Auto-Hide & Fullscreen Chrome Auto-Hide */
 @media (prefers-reduced-motion: no-preference) {
   .yqc-root {
-    transition: opacity 140ms ease-out;
+    transition:
+      opacity 140ms ease-out,
+      gap 240ms cubic-bezier(0.2, 0, 0, 1),
+      padding 240ms cubic-bezier(0.2, 0, 0, 1),
+      border-radius 240ms cubic-bezier(0.2, 0, 0, 1);
   }
 
   .yqc-root[data-yqc-idle='true']:not(:has(:focus-visible)),
