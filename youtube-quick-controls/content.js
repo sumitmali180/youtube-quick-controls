@@ -732,46 +732,31 @@
         anchor.mode === 'fullscreen' && anchor.fsPlacement === 'classic-overlay'
       );
 
-      if (anchor.mode === 'watch' && anchor.likeEl) {
+      if (anchor.mode === 'watch') {
         host.style.left = '';
         host.style.bottom = '';
-        try {
-          const likeRect = anchor.likeEl.getBoundingClientRect();
-          const parentRect = anchor.mountParent.getBoundingClientRect();
-          const hostWidth = host.getBoundingClientRect().width || host.offsetWidth || 0;
-          if (likeRect.width > 0 && parentRect.width > 0) {
-            const rawOffset = Math.max(0, Math.round(likeRect.left - parentRect.left));
-            const maxOffset =
-              hostWidth > 0 && parentRect.width > hostWidth
-                ? Math.round(parentRect.width - hostWidth)
-                : rawOffset;
-            const clampedOffset = Math.min(rawOffset, Math.max(0, maxOffset));
-            host.style.marginInlineStart =
-              clampedOffset > 0 && clampedOffset < parentRect.width ? `${clampedOffset}px` : '0px';
-          }
-        } catch {
-          host.style.marginInlineStart = '0px';
-        }
+        host.style.right = '';
+        host.style.marginInlineStart = 'auto';
+        host.style.marginInlineEnd = '0px';
         return;
       }
 
       if (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'above-like' && anchor.likeEl) {
         host.style.marginInlineStart = '';
+        host.style.marginInlineEnd = '';
         try {
           const likeRect = anchor.likeEl.getBoundingClientRect();
           const playerRect = anchor.fsPlayer.getBoundingClientRect();
-          const hostWidth = host.offsetWidth || 380;
           const hostHeight = host.offsetHeight || 56;
           if (likeRect.height > 0 && playerRect.height > 0) {
-            const rawLeft = likeRect.left - playerRect.left;
-            const maxLeft = Math.max(8, playerRect.width - hostWidth - 8);
-            const clampedLeft = Math.max(8, Math.min(Math.round(rawLeft), Math.round(maxLeft)));
+            const rawRight = Math.max(16, Math.round(playerRect.right - likeRect.right));
             const rawBottom = playerRect.bottom - likeRect.top + 8;
             const clampedBottom = Math.max(
               56,
               Math.min(Math.round(rawBottom), Math.round(playerRect.height - hostHeight - 8))
             );
-            host.style.left = `${clampedLeft}px`;
+            host.style.right = `${rawRight}px`;
+            host.style.left = 'auto';
             host.style.bottom = `${clampedBottom}px`;
           }
         } catch {
@@ -781,7 +766,9 @@
       }
 
       host.style.marginInlineStart = '';
+      host.style.marginInlineEnd = '';
       host.style.left = '';
+      host.style.right = '';
       host.style.bottom = '';
     }
 

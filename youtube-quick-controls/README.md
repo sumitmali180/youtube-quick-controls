@@ -6,9 +6,11 @@ A lightweight **Manifest V3 Chrome Extension** that places a compact **Star icon
 
 ## Features
 
-- **Compact Star Button on Right with Smooth Leftward Expand/Collapse Transition:**
-  - Displays as a compact, smaller star badge (`★`) on the **right** side of the control area directly above YouTube's Like button when not hovered, taking minimal space.
-  - Hovering over the star box smoothly elongates and expands the controls panel towards the **left** from the star to its full size and layout with a fluid CSS transition animation; moving the mouse away smoothly collapses it back towards the right into the star.
+- **Compact Star Button on Right with Fixed-Right Smooth Leftward Expansion:**
+  - Displays as a compact, smaller star badge (`★`) anchored consistently to the **right edge** of its parent container directly above YouTube's action toolbar when not hovered, taking minimal space.
+  - Hovering over the Star Box smoothly elongates and expands the controls panel towards the **left** from the star to its full size and layout with a fluid `380ms cubic-bezier(0.16, 1, 0.3, 1)` transition animation.
+  - The right edge and the star icon remain fixed in exactly the same position throughout the entire animation with zero horizontal jumps or shifts.
+  - Moving the cursor between the star icon and the controls stays within the component boundary and will not trigger unwanted collapsing; leaving the component smoothly collapses it back towards the right into the star.
   - Clicking the star toggles pinning the controls open/closed.
   - Keyboard accessible: focuses with `Tab`, opens with `Enter` / `Space` / `ArrowLeft` / `ArrowRight`, navigates left into chips with `ArrowLeft`, wraps back to the star with `ArrowRight` from the last chip, and collapses with `Escape`.
 - **Two Compact Horizontal Rows Above the Like Button:**

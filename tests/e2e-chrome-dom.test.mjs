@@ -331,7 +331,8 @@ class CDPClient {
   }
 
   close() {
-    this.ws.close();
+    try { this.ws.close(); } catch {}
+    try { this.ws.terminate?.(); } catch {}
   }
 }
 
@@ -374,6 +375,8 @@ async function launchBrowser(binPath = CHROME_BIN, extraFlags = []) {
     cdp,
     async dispose() {
       try { cdp.close(); } catch {}
+      try { proc.stdout?.destroy?.(); } catch {}
+      try { proc.stderr?.destroy?.(); } catch {}
       try { proc.kill('SIGKILL'); } catch {}
       await new Promise((r) => setTimeout(r, 150));
       try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
@@ -455,6 +458,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const activeSpeed = speedBtns.find(b => b.getAttribute('aria-pressed') === 'true');
       const activeQuality = qualityBtns.find(b => b.getAttribute('aria-pressed') === 'true');
       const hRect = host.getBoundingClientRect();
+      const parentRect = host.parentElement.getBoundingClientRect();
+      const starRect = starBtn.getBoundingClientRect();
       const sRowRect = speedRow.getBoundingClientRect();
       const qRowRect = qualityRow.getBoundingClientRect();
       const lRect = likeBtn.getBoundingClientRect();
@@ -475,6 +480,10 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         likeTop: Math.round(lRect.top),
         speedRowBottom: Math.round(sRowRect.bottom),
         qualityRowTop: Math.round(qRowRect.top),
+        hostRight: Math.round(hRect.right),
+        parentRight: Math.round(parentRect.right),
+        starRight: Math.round(starRect.right),
+        starLeft: Math.round(starRect.left),
         hostLeft: Math.round(hRect.left),
         likeLeft: Math.round(lRect.left),
         speedLabels: speedBtns.map(b => b.textContent.trim()),
@@ -501,7 +510,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(watchLayout.qualityGroupRole, 'group');
     assert.ok(watchLayout.speedRowBottom <= watchLayout.qualityRowTop + 2, 'Row 1 speed pills must sit directly above Row 2 quality pills');
     assert.ok(watchLayout.hostBottom <= watchLayout.likeTop + 1, `Controls must render ABOVE Like button (${watchLayout.hostBottom} <= ${watchLayout.likeTop})`);
-    assert.ok(Math.abs(watchLayout.hostLeft - watchLayout.likeLeft) <= 10, 'Controls must align with Like button left edge');
+    assert.ok(Math.abs(watchLayout.hostRight - watchLayout.parentRight) <= 2, 'Controls must anchor to parent container right edge');
+    assert.ok(watchLayout.starLeft >= watchLayout.likeLeft, 'Collapsed Star Box must be positioned on the RIGHT side of the toolbar');
     assert.ok(watchLayout.speedDims[0] >= 24 && watchLayout.speedDims[1] >= 24);
     assert.ok(watchLayout.qualityDims[0] >= 24 && watchLayout.qualityDims[1] >= 24);
     assert.equal(watchLayout.starOrder, '2', 'Star button must be ordered on right');
@@ -522,10 +532,21 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const rates = Array.from(speedRow.querySelectorAll('button.yqc-chip')).map(b => Number(b.dataset.yqcRate));
 
       // Star hover-reveal & pin toggle
+      const collapsedHRect = host.getBoundingClientRect();
+      const collapsedStarRect = starBtn.getBoundingClientRect();
       starBtn.dispatchEvent(new MouseEvent('pointerenter', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 450));
+      const expandedHRect = host.getBoundingClientRect();
+      const expandedStarRect = starBtn.getBoundingClientRect();
       const afterStarEnter = {
         revealed: host.dataset.yqcRevealed === 'true',
-        starExpanded: starBtn.getAttribute('aria-expanded')
+        starExpanded: starBtn.getAttribute('aria-expanded'),
+        collapsedLeft: Math.round(collapsedHRect.left),
+        expandedLeft: Math.round(expandedHRect.left),
+        collapsedRight: Math.round(collapsedHRect.right),
+        expandedRight: Math.round(expandedHRect.right),
+        collapsedStarRight: Math.round(collapsedStarRect.right),
+        expandedStarRight: Math.round(expandedStarRect.right)
       };
       starBtn.click();
       const afterStarClick = {
@@ -536,6 +557,25 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const afterStarUnclick = {
         pinned: host.dataset.yqcPinned === 'true'
       };
+
+      // Verify hover across children and smooth collapse on leave with fixed right edge
+      speedRow.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }));
+      const whileInsideChildrenRevealed = host.dataset.yqcRevealed === 'true';
+      host.dispatchEvent(new MouseEvent('pointerleave', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 650));
+      const postLeaveHRect = host.getBoundingClientRect();
+      const afterLeaveCollapse = {
+        whileInsideChildrenRevealed,
+        revealed: host.dataset.yqcRevealed === 'true',
+        collapsedWidth: Math.round(collapsedHRect.width),
+        postLeaveWidth: Math.round(postLeaveHRect.width),
+        postLeaveRight: Math.round(postLeaveHRect.right),
+        initialRight: Math.round(collapsedHRect.right)
+      };
+
+      // Re-engage on hover for subsequent interactions
+      host.dispatchEvent(new MouseEvent('pointerenter', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 450));
 
       // One click directly on 2.5x pill (no dropdown)
       speedRow.querySelector('[data-yqc-rate="2.5"]').click();
@@ -591,6 +631,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         afterStarEnter,
         afterStarClick,
         afterStarUnclick,
+        afterLeaveCollapse,
         after25,
         afterCustomYt,
         afterExternalCustom,
@@ -607,9 +648,16 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
 
     assert.equal(speedRes.afterStarEnter.revealed, true);
     assert.equal(speedRes.afterStarEnter.starExpanded, 'true');
+    assert.ok(speedRes.afterStarEnter.expandedLeft < speedRes.afterStarEnter.collapsedLeft, 'Hovering must expand controls from right to left');
+    assert.ok(Math.abs(speedRes.afterStarEnter.expandedRight - speedRes.afterStarEnter.collapsedRight) <= 2, 'Right edge must remain fixed in exactly the same position');
+    assert.ok(Math.abs(speedRes.afterStarEnter.expandedStarRight - speedRes.afterStarEnter.collapsedStarRight) <= 2, 'Star icon must remain positioned on the right side');
     assert.equal(speedRes.afterStarClick.pinned, true);
     assert.equal(speedRes.afterStarClick.starExpanded, 'true');
     assert.equal(speedRes.afterStarUnclick.pinned, false);
+    assert.equal(speedRes.afterLeaveCollapse.whileInsideChildrenRevealed, true, 'Moving across children must not collapse controls');
+    assert.equal(speedRes.afterLeaveCollapse.revealed, false, 'Leaving component must collapse controls');
+    assert.ok(Math.abs(speedRes.afterLeaveCollapse.postLeaveWidth - speedRes.afterLeaveCollapse.collapsedWidth) <= 2, 'Controls must collapse to resting compact width');
+    assert.ok(Math.abs(speedRes.afterLeaveCollapse.postLeaveRight - speedRes.afterLeaveCollapse.initialRight) <= 2, 'Right edge must remain fixed during collapse');
     assert.equal(speedRes.rates.includes(2.5), true);
     assert.equal(speedRes.rates.includes(1.15), true);
     assert.equal(speedRes.after25.rate, 2.5);
@@ -734,7 +782,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       host?.querySelector('#yqc-speed-row [data-yqc-rate="2"]')?.click();
       const fsRateAfterClick = fsVideo?.playbackRate;
       host?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 450));
       const activeHRect = host?.getBoundingClientRect();
       const panelRect = document.getElementById('yqc-controls-panel')?.getBoundingClientRect();
       console.log('DEBUG fsDelhi:', {
@@ -755,6 +803,10 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         fsLikeTop: Math.round(lRect?.top || 0),
         collapsedWidth: Math.round(hRect?.width || 0),
         visibleWidth: Math.round(activeHRect?.width || 0),
+        collapsedRight: Math.round(hRect?.right || 0),
+        expandedRight: Math.round(activeHRect?.right || 0),
+        collapsedLeft: Math.round(hRect?.left || 0),
+        expandedLeft: Math.round(activeHRect?.left || 0),
         fsRateAfterClick,
         autohideOpacity,
         debug: {
@@ -773,6 +825,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(fsDelhi.fsPlacement, 'above-like');
     assert.ok(fsDelhi.collapsedWidth <= 40, 'Fullscreen controls must collapse to compact star shape when not hovered');
     assert.ok(fsDelhi.visibleWidth > 50, 'Fullscreen controls must expand to full width on hover');
+    assert.ok(Math.abs(fsDelhi.expandedRight - fsDelhi.collapsedRight) <= 2, 'Fullscreen right edge must remain fixed in position');
+    assert.ok(fsDelhi.expandedLeft < fsDelhi.collapsedLeft, 'Fullscreen controls must expand towards left');
     assert.equal(fsDelhi.fsRateAfterClick, 2, 'Clicking speed chip in fullscreen must immediately change video playbackRate');
     assert.ok(fsDelhi.hostBottom <= fsDelhi.fsLikeTop + 2, `Fullscreen controls must sit directly ABOVE fullscreen Like button (${fsDelhi.hostBottom} <= ${fsDelhi.fsLikeTop})`);
     assert.equal(fsDelhi.autohideOpacity, '1', 'Hovered controls must remain visible even if .ytp-autohide toggles');
@@ -1082,7 +1136,10 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     });
   } finally {
     await chrome.dispose();
-    server.close();
+    await new Promise((r) => {
+      server.closeAllConnections?.();
+      server.close(r);
+    });
   }
 });
 
