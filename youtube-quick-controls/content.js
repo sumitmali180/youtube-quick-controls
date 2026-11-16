@@ -1237,7 +1237,7 @@
       const tooltipText = document.createElement('span');
       tooltip.append(tooltipIcon, tooltipText);
 
-      host.append(starBtn, panel, tooltip);
+      host.append(panel, starBtn, tooltip);
 
       if (anchor.referenceNode && anchor.referenceNode.parentElement === anchor.mountParent) {
         anchor.mountParent.insertBefore(host, anchor.referenceNode);
@@ -1351,14 +1351,18 @@
               }
               return;
             }
-            if ((event.key === 'ArrowRight' || event.key === 'ArrowDown') && chips.length > 0) {
+            if (
+              (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowDown') &&
+              chips.length > 0
+            ) {
               event.preventDefault();
               event.stopPropagation();
               this.setRevealed(true);
+              const targetChip = event.key === 'ArrowLeft' ? chips[chips.length - 1] : chips[0];
               for (const item of host.querySelectorAll('button.yqc-chip, button.yqc-star-btn')) {
-                item.setAttribute('tabindex', item === chips[0] ? '0' : '-1');
+                item.setAttribute('tabindex', item === targetChip ? '0' : '-1');
               }
-              chips[0].focus();
+              targetChip.focus();
               return;
             }
             return;
@@ -1380,7 +1384,11 @@
           let nextTarget = null;
 
           if (event.key === nextKey) {
-            nextTarget = items[currentIndex < 0 ? 0 : (currentIndex + 1) % items.length];
+            if (currentIndex === items.length - 1 && this.ui?.starBtn) {
+              nextTarget = this.ui.starBtn;
+            } else {
+              nextTarget = items[currentIndex < 0 ? 0 : (currentIndex + 1) % items.length];
+            }
           } else if (event.key === prevKey) {
             if (currentIndex === 0 && this.ui?.starBtn) {
               nextTarget = this.ui.starBtn;

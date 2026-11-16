@@ -94,6 +94,7 @@ ytd-app[dark] .yqc-root,
   box-sizing: border-box;
   flex-shrink: 0;
   outline: none;
+  order: 2;
 }
 
 .yqc-star-icon {
@@ -137,14 +138,16 @@ ytd-app[dark] .yqc-root,
 .yqc-panel {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 4px;
   max-inline-size: 0;
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-  transform: translateX(-8px);
+  transform: translateX(8px);
+  transform-origin: right center;
   box-sizing: border-box;
+  order: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -190,6 +193,7 @@ ytd-app[dark] .yqc-root,
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
   inline-size: max-content;
   box-sizing: border-box;

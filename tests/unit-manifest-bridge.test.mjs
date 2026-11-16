@@ -76,6 +76,9 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   const stylesCss = readExtFile('styles.css');
   assert.match(stylesCss, /\.yqc-star-btn\b/, 'styles.css must style star trigger button');
   assert.match(stylesCss, /\.yqc-panel\b/, 'styles.css must style hover-revealed controls panel');
+  assert.match(stylesCss, /order:\s*2/, 'styles.css must set star button on the right with order: 2');
+  assert.match(stylesCss, /order:\s*1/, 'styles.css must set controls panel on the left with order: 1');
+  assert.match(stylesCss, /transform:\s*translateX\(8px\)/, 'styles.css must collapse panel towards star on right');
   assert.match(stylesCss, /\.yqc-row\b/, 'styles.css must style compact .yqc-row containers');
   assert.match(stylesCss, /\.yqc-chip\[aria-pressed='true'\]/, 'styles.css must style active state directly from [aria-pressed="true"]');
   assert.match(stylesCss, /\.yqc-chip\[aria-disabled='true'\]/, 'styles.css must style disabled state directly from [aria-disabled="true"]');

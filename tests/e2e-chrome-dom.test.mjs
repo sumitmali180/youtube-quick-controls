@@ -484,6 +484,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         activeQualityTitle: activeQuality?.title,
         speedDims: [Math.round(sRect.width), Math.round(sRect.height)],
         qualityDims: [Math.round(qRect.width), Math.round(qRect.height)],
+        starOrder: getComputedStyle(starBtn).order,
+        panelOrder: getComputedStyle(panel).order,
         likeClicks: window.__TEST_STATE__.likeClicks
       };
     })()`);
@@ -502,6 +504,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.ok(Math.abs(watchLayout.hostLeft - watchLayout.likeLeft) <= 10, 'Controls must align with Like button left edge');
     assert.ok(watchLayout.speedDims[0] >= 24 && watchLayout.speedDims[1] >= 24);
     assert.ok(watchLayout.qualityDims[0] >= 24 && watchLayout.qualityDims[1] >= 24);
+    assert.equal(watchLayout.starOrder, '2', 'Star button must be ordered on right');
+    assert.equal(watchLayout.panelOrder, '1', 'Panel must be ordered on left');
     assert.equal(watchLayout.likeClicks, 1, 'Native Like button click handler must stay intact');
     assert.deepEqual(watchLayout.speedLabels, ['0.25x', '0.5x', '0.75x', '1.0x', '1.15x', '1.25x', '1.5x', '1.75x', '2.0x', '2.5x', '3.0x']);
     assert.deepEqual(watchLayout.qualityLabels, ['Auto', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p']);
@@ -572,6 +576,16 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
       const afterArrowDownInQuality = Boolean(document.getElementById('yqc-quality-row')?.contains(document.activeElement));
 
+      // Test star on right keyboard entry via ArrowLeft and wrapping via ArrowRight from last chip
+      starBtn.focus();
+      starBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      const afterStarArrowLeft = document.activeElement?.dataset?.yqcQuality || document.activeElement?.dataset?.yqcRate;
+      const allChips = Array.from(host.querySelectorAll('button.yqc-chip'));
+      const lastChip = allChips[allChips.length - 1];
+      lastChip.focus();
+      lastChip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      const afterLastChipArrowRightIsStar = document.activeElement === starBtn;
+
       return {
         rates,
         afterStarEnter,
@@ -583,6 +597,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         afterExternalPreset,
         afterArrowRightRate,
         afterArrowDownInQuality,
+        afterStarArrowLeft,
+        afterLastChipArrowRightIsStar,
         hasNativeFocusGroup: 'focusGroup' in HTMLElement.prototype,
         playerClicks: window.__TEST_STATE__.playerClicks,
         globalHotkeys: window.__TEST_STATE__.globalHotkeys
@@ -608,6 +624,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     if (!speedRes.hasNativeFocusGroup) {
       assert.equal(speedRes.afterArrowRightRate, '1.15');
       assert.equal(speedRes.afterArrowDownInQuality, true);
+      assert.ok(speedRes.afterStarArrowLeft, 'ArrowLeft on star must move focus into chips');
+      assert.equal(speedRes.afterLastChipArrowRightIsStar, true, 'ArrowRight from last chip must move focus to star on right');
     }
     assert.equal(speedRes.playerClicks, 0, 'Clicking controls must not bubble clicks to #movie_player');
     assert.equal(speedRes.globalHotkeys, 0, 'Toolbar keys must not trigger YouTube hotkeys');
