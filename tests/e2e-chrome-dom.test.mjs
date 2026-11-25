@@ -519,7 +519,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.ok(watchLayout.speedDims[0] >= 24 && watchLayout.speedDims[1] >= 24);
     assert.ok(watchLayout.qualityDims[0] >= 24 && watchLayout.qualityDims[1] >= 24);
     assert.equal(watchLayout.likeClicks, 1, 'Native Like button click handler must stay intact');
-    assert.deepEqual(watchLayout.displayLabels, ['Fit', 'Stretch', 'Fill', 'Original', 'Zoom +', 'Zoom −']);
+    assert.deepEqual(watchLayout.displayLabels, ['Fit', 'Stretch', 'Fill', 'Original', 'Zoom +', 'Zoom −', 'Reset']);
     assert.deepEqual(watchLayout.speedLabels, ['0.25x', '0.5x', '0.75x', '1.0x', '1.15x', '1.25x', '1.5x', '1.75x', '2.0x', '2.5x', '3.0x']);
     assert.deepEqual(watchLayout.qualityLabels, ['Auto', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p']);
     assert.equal(watchLayout.activeDisplayLabel, 'Original');
@@ -557,9 +557,11 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const fill = clickAndMeasure('fill');
       const original = clickAndMeasure('original');
 
-      // Test Zoom + / Zoom - incremental scaling, smooth transition, mode preservation & clamping bounds
+      // Test Zoom + / Zoom - incremental scaling, Reset button, smooth transition, mode preservation & clamping bounds
       const zoomInBtn = displayRow.querySelector('[data-yqc-zoom="in"]');
       const zoomOutBtn = displayRow.querySelector('[data-yqc-zoom="out"]');
+      const zoomResetBtn = displayRow.querySelector('[data-yqc-zoom="reset"]');
+      const resetDisabledInitially = zoomResetBtn.getAttribute('aria-disabled');
       const player = document.getElementById('movie_player');
       const host = document.getElementById('yqc-controls-host');
       const hostRectBeforeZoom = host.getBoundingClientRect();
@@ -578,7 +580,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         playerOverflow: getComputedStyle(player).overflow,
         hostUnchanged: Math.round(host.getBoundingClientRect().width) === Math.round(hostRectBeforeZoom.width),
         zoomInHasPressed: zoomInBtn.hasAttribute('aria-pressed'),
-        zoomOutHasPressed: zoomOutBtn.hasAttribute('aria-pressed')
+        zoomOutHasPressed: zoomOutBtn.hasAttribute('aria-pressed'),
+        resetHasPressed: zoomResetBtn.hasAttribute('aria-pressed'),
+        resetDisabledWhenZoomed: zoomResetBtn.getAttribute('aria-disabled')
       };
 
       // Switch to Stretch while zoomed -> display mode changes while zoom remains 1.2
@@ -607,12 +611,14 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         zoomOutDisabled: zoomOutBtn.getAttribute('aria-disabled')
       };
 
-      // Step back to 1.0x (5 steps up from 0.5 -> 1.0) and leave Fill active at 1.0x for Fullscreen test
-      for (let i = 0; i < 5; i += 1) zoomInBtn.click();
+      // Click Reset once -> smoothly returns zoom from 0.5x back to original 1.0x while keeping Stretch mode
+      zoomResetBtn.click();
       await new Promise(r => setTimeout(r, 260));
       const backToNormal = {
         zoomAttr: video.dataset.yqcZoom || null,
-        hasZoomClass: video.classList.contains('yqc-video-zoom')
+        hasZoomClass: video.classList.contains('yqc-video-zoom'),
+        displayModePreserved: video.dataset.yqcDisplay,
+        resetDisabledAfter: zoomResetBtn.getAttribute('aria-disabled')
       };
       const fillForFs = clickAndMeasure('fill');
 
@@ -621,6 +627,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         stretch,
         fill,
         original,
+        resetDisabledInitially,
         zoomedFit,
         zoomedStretch,
         maxClamped,
@@ -657,6 +664,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(displayRes.original.height, '360px');
     assert.deepEqual(displayRes.original.pressedButtons, ['original']);
 
+    assert.equal(displayRes.resetDisabledInitially, 'true', 'Reset must be disabled when zoom is already 1.0x');
     assert.equal(displayRes.zoomedFit.displayMode, 'fit');
     assert.equal(displayRes.zoomedFit.objectFit, 'contain', 'Zoom must maintain active Fit display mode');
     assert.equal(displayRes.zoomedFit.zoomAttr, '1.2');
@@ -666,6 +674,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(displayRes.zoomedFit.hostUnchanged, true, 'Zooming video must not affect surrounding player controls');
     assert.equal(displayRes.zoomedFit.zoomInHasPressed, false);
     assert.equal(displayRes.zoomedFit.zoomOutHasPressed, false);
+    assert.equal(displayRes.zoomedFit.resetHasPressed, false);
+    assert.equal(displayRes.zoomedFit.resetDisabledWhenZoomed, null, 'Reset must enable when zoomed');
 
     assert.equal(displayRes.zoomedStretch.displayMode, 'stretch');
     assert.equal(displayRes.zoomedStretch.objectFit, 'fill');
@@ -681,6 +691,8 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
 
     assert.equal(displayRes.backToNormal.zoomAttr, null);
     assert.equal(displayRes.backToNormal.hasZoomClass, false);
+    assert.equal(displayRes.backToNormal.displayModePreserved, 'stretch', 'Reset zoom must preserve active display mode');
+    assert.equal(displayRes.backToNormal.resetDisabledAfter, 'true', 'Reset must re-disable at 1.0x');
 
     assert.equal(displayRes.fillForFs.modeAttr, 'fill');
     assert.equal(displayRes.playerClicks, 0, 'Display and zoom control clicks must not bubble to #movie_player');

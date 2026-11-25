@@ -1525,14 +1525,16 @@
       const zoomPercent = Math.round(zoom * 100);
       const canZoomIn = zoom < ZOOM_MAX - 0.001;
       const canZoomOut = zoom > ZOOM_MIN + 0.001;
+      const isZoomed = Math.abs(zoom - 1.0) >= 0.001;
 
       const existingButtons = Array.from(displayRow.querySelectorAll('button.yqc-chip-display'));
       const existingZoomIn = displayRow.querySelector('button.yqc-chip-zoom[data-yqc-zoom="in"]');
       const existingZoomOut = displayRow.querySelector('button.yqc-chip-zoom[data-yqc-zoom="out"]');
+      const existingZoomReset = displayRow.querySelector('button.yqc-chip-zoom[data-yqc-zoom="reset"]');
       const canUpdateInPlace =
         existingButtons.length === DISPLAY_MODES.length &&
         existingButtons.every((btn, idx) => btn.dataset.yqcDisplayMode === DISPLAY_MODES[idx].id) &&
-        Boolean(existingZoomIn && existingZoomOut);
+        Boolean(existingZoomIn && existingZoomOut && existingZoomReset);
 
       const syncZoomBtnProps = (btn, direction) => {
         if (direction === 'in') {
@@ -1543,12 +1545,20 @@
             btn.setAttribute('aria-disabled', 'true');
             btn.title = `Maximum zoom reached (${zoomPercent}%)`;
           }
-        } else if (canZoomOut) {
+        } else if (direction === 'out') {
+          if (canZoomOut) {
+            btn.removeAttribute('aria-disabled');
+            btn.title = `Zoom out (${zoomPercent}%)`;
+          } else {
+            btn.setAttribute('aria-disabled', 'true');
+            btn.title = `Minimum zoom reached (${zoomPercent}%)`;
+          }
+        } else if (isZoomed) {
           btn.removeAttribute('aria-disabled');
-          btn.title = `Zoom out (${zoomPercent}%)`;
+          btn.title = `Reset zoom to 100% (currently ${zoomPercent}%)`;
         } else {
           btn.setAttribute('aria-disabled', 'true');
-          btn.title = `Minimum zoom reached (${zoomPercent}%)`;
+          btn.title = 'Zoom is at original (100%)';
         }
       };
 
@@ -1561,6 +1571,7 @@
         }
         syncZoomBtnProps(existingZoomIn, 'in');
         syncZoomBtnProps(existingZoomOut, 'out');
+        syncZoomBtnProps(existingZoomReset, 'reset');
         return;
       }
 
@@ -1608,7 +1619,8 @@
 
       const zoomDefs = [
         { direction: 'in', label: 'Zoom +', ariaLabel: 'Zoom in', delta: ZOOM_STEP },
-        { direction: 'out', label: 'Zoom −', ariaLabel: 'Zoom out', delta: -ZOOM_STEP }
+        { direction: 'out', label: 'Zoom −', ariaLabel: 'Zoom out', delta: -ZOOM_STEP },
+        { direction: 'reset', label: 'Reset', ariaLabel: 'Reset zoom', isReset: true }
       ];
 
       for (const def of zoomDefs) {
@@ -1623,7 +1635,11 @@
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (btn.getAttribute('aria-disabled') === 'true') return;
-          this.adjustZoom(def.delta);
+          if (def.isReset) {
+            this.resetZoom();
+          } else {
+            this.adjustZoom(def.delta);
+          }
         });
 
         displayRow.appendChild(btn);
@@ -1665,6 +1681,22 @@
       if (video) {
         this.bindVideoElement(video);
         this.applyVideoDisplayElement(video, this.displayMode, next);
+      }
+      this.renderDisplayRow();
+      return true;
+    }
+
+    resetZoom() {
+      const current = clampZoom(this.zoomScale);
+      if (Math.abs(current - 1.0) < 0.001) {
+        this.renderDisplayRow();
+        return false;
+      }
+      this.zoomScale = 1.0;
+      const video = this.findActiveVideo(this.mode) || this.videoEl;
+      if (video) {
+        this.bindVideoElement(video);
+        this.applyVideoDisplayElement(video, this.displayMode, 1.0);
       }
       this.renderDisplayRow();
       return true;

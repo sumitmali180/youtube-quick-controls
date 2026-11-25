@@ -99,6 +99,7 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   assert.match(contentJs, /const ZOOM_MIN = 0\.5;/);
   assert.match(contentJs, /const ZOOM_MAX = 2\.5;/);
   assert.match(contentJs, /const ZOOM_STEP = 0\.1;/);
+  assert.match(contentJs, /direction:\s*'reset',\s*label:\s*'Reset'/);
   assert.match(contentJs, /const DISPLAY_MODES = Object\.freeze/);
   assert.match(contentJs, /id:\s*'fit',\s*label:\s*'Fit'/);
   assert.match(contentJs, /id:\s*'stretch',\s*label:\s*'Stretch'/);

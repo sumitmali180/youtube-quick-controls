@@ -7,15 +7,15 @@ A lightweight **Manifest V3 Chrome Extension** that adds compact horizontal rows
 ## Features
 
 - **Directly Above the Like Button (Compact Horizontal Rows):** Anchors cleanly above YouTube's action bar aligned with the Like button:
-  - **Row 1 – Video Display:** `[ Fit ] [ Stretch ] [ Fill ] [ Original ] | [ Zoom + ] [ Zoom − ]`
+  - **Row 1 – Video Display:** `[ Fit ] [ Stretch ] [ Fill ] [ Original ] | [ Zoom + ] [ Zoom − ] [ Reset ]`
   - **Row 2 – Playback Speed:** `[ 0.25x ] [ 0.5x ] [ 0.75x ] [ 1.0x ] [ 1.25x ] [ 1.5x ] [ 1.75x ] [ 2.0x ] [ 2.5x ] [ 3.0x ]`
   - **Row 3 – Video Quality:** `[ Auto ] [ 144p ] [ 240p ] [ 360p ] [ 480p ] [ 720p ] [ 1080p ] [ 1440p ] [ 2160p ]`
-- **One-Click Video Display Modes (`Fit`, `Stretch`, `Fill`, `Original`) & Smooth Zoom (`Zoom +`, `Zoom −`):**
+- **One-Click Video Display Modes (`Fit`, `Stretch`, `Fill`, `Original`) & Smooth Zoom (`Zoom +`, `Zoom −`, `Reset`):**
   - **Fit** (`object-fit: contain`): Scales the video proportionally to fit within the player frame without cropping.
   - **Stretch** (`object-fit: fill`): Stretches video width and height to fill 100% of the player frame.
   - **Fill** (`object-fit: cover`): Scales the video proportionally to cover the entire player frame, cropping excess edges.
   - **Original**: Restores YouTube's native untouched video sizing and aspect ratio.
-  - **Zoom + / Zoom −**: Smoothly zooms the video in or out in `0.1x` increments (`0.5x`–`2.5x`) clipped cleanly inside the player container while preserving the active display mode and never affecting surrounding player UI.
+  - **Zoom + / Zoom − / Reset**: Smoothly zooms the video in or out in `0.1x` increments (`0.5x`–`2.5x`) and resets zoom back to `1.0x` in one click while preserving the active display mode and never affecting surrounding player UI.
   - Applies immediately on click with a clear active-state indicator (`aria-pressed="true"`), persists across fullscreen toggles on the same video, and never interferes with native YouTube controls.
 - **One-Click Instant Playback Speed Control:**
   - Standard presets: `0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, `2.0x`, `2.5x`, `3.0x` (plus any additional speeds exposed dynamically by YouTube or set externally/via popup).
