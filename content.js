@@ -274,7 +274,9 @@
       this.manualQualityOverride = false;
       this.lastVideoKey = null;
       this.lastUrlHref = typeof location === 'object' ? location.href : '';
-      this.appliedDefaultsForKey = null;
+      this.appliedDefaultSpeedForKey = null;
+      this.appliedDefaultQualityState = null;
+      this.failedDefaultQualityKey = null;
 
       this.qualityState = {
         available: false,
@@ -299,7 +301,11 @@
 
       this.bridge.onEvent('YQC_EVENT_PLAYER_STATE', (state) => {
         if (!state) return;
+        if (!this.isStateForCurrentVideo(state)) return;
         this.mergePlayerState(state);
+        if (state.available && !this.isQualitySwitching) {
+          void this.maybeApplyDefaults();
+        }
       });
 
       this.bridge.onEvent('YQC_EVENT_RATE_CHANGE', (payload) => {
@@ -445,12 +451,38 @@
       return url.pathname;
     }
 
+    getUrlVideoId() {
+      try {
+        const url = new URL(location.href);
+        if (url.pathname.startsWith('/watch')) {
+          return url.searchParams.get('v') || null;
+        }
+      } catch {
+        // Ignore invalid URL.
+      }
+      return null;
+    }
+
+    isStateForCurrentVideo(state) {
+      if (!state) return false;
+      const urlVideoId = this.getUrlVideoId();
+      if (urlVideoId && state.videoId && state.videoId !== urlVideoId) {
+        return false;
+      }
+      return true;
+    }
+
     handleSettingsUpdate(settings) {
       if (!settings.enabled) {
         this.unmountControls();
         return;
       }
-      this.refreshContext({ applyDefaultsIfNew: false });
+      this.appliedDefaultSpeedForKey = null;
+      this.appliedDefaultQualityState = null;
+      this.failedDefaultQualityKey = null;
+      this.manualSpeedOverride = false;
+      this.manualQualityOverride = false;
+      this.refreshContext({ applyDefaultsIfNew: true });
     }
 
     /**
@@ -1569,7 +1601,7 @@
       }, 3600);
     }
 
-    async applyVideoQuality(targetQuality, { markManual = true } = {}) {
+    async applyVideoQuality(targetQuality, { markManual = true, silent = false } = {}) {
       if (this.isQualitySwitching) {
         return false;
       }
@@ -1584,11 +1616,13 @@
       this.clearIdleTimer();
       this.renderQualityRow();
 
+      const verifyTimeoutMs = 1500;
+
       try {
         const result = await this.bridge.request(
           'YQC_REQ_SET_QUALITY',
-          { mode: this.mode, quality: targetQuality, verifyTimeoutMs: 1500 },
-          3500
+          { mode: this.mode, quality: targetQuality, verifyTimeoutMs },
+          verifyTimeoutMs + 2000
         );
 
         this.isQualitySwitching = false;
@@ -1603,11 +1637,13 @@
         // Graceful fallback: keep previous selected quality visible unless player reports real active state
         const fallbackState = result?.state?.available ? result.state : previousState;
         this.mergePlayerState(fallbackState);
-        const targetLabel =
-          previousState.options.find((o) => o.quality === targetQuality)?.label || targetQuality;
-        this.showTooltip(
-          result?.reason || `Could not switch to ${targetLabel}. Keeping previous quality.`
-        );
+        if (!silent) {
+          const targetLabel =
+            previousState.options.find((o) => o.quality === targetQuality)?.label || targetQuality;
+          this.showTooltip(
+            result?.reason || `Could not switch to ${targetLabel}. Keeping previous quality.`
+          );
+        }
         return false;
       } catch (error) {
         this.isQualitySwitching = false;
@@ -1616,7 +1652,9 @@
           return false;
         }
         this.mergePlayerState(previousState);
-        this.showTooltip(error?.message || 'Quality change could not be verified.');
+        if (!silent) {
+          this.showTooltip(error?.message || 'Quality change could not be verified.');
+        }
         return false;
       }
     }
@@ -1640,15 +1678,38 @@
       return concrete[0]?.quality || null;
     }
 
+    needsQualityManifestRefetch(state) {
+      const settings = this.settingsStore.settings;
+      if (!settings.enabled || !settings.autoApply || this.manualQualityOverride) {
+        return false;
+      }
+      const desired = settings.defaultQuality;
+      if (!desired || desired === 'auto') {
+        return false;
+      }
+      if (!state?.available) {
+        return true;
+      }
+      const key = this.getVideoKey();
+      if (this.appliedDefaultQualityState?.key === key && this.appliedDefaultQualityState?.quality === desired) {
+        return false;
+      }
+      return !state.options?.some((o) => o.quality === desired);
+    }
+
     async fetchAndUpdateQualityState({ tryApplyDefaults = false } = {}) {
       try {
         const state = await this.bridge.request('YQC_REQ_GET_STATE', { mode: this.mode }, 1500);
         if (state) {
+          if (!this.isStateForCurrentVideo(state)) {
+            this.scheduleQualityRefetch();
+            return;
+          }
           this.mergePlayerState(state);
-          if (tryApplyDefaults && state.available) {
+          if (state.available && (tryApplyDefaults || this.needsQualityManifestRefetch(state))) {
             await this.maybeApplyDefaults();
           }
-          if (state.isLoading || !state.available) {
+          if (state.isLoading || !state.available || this.needsQualityManifestRefetch(state)) {
             this.scheduleQualityRefetch();
           }
         }
@@ -1664,7 +1725,7 @@
           if (!this.hostEl?.isConnected) return;
           try {
             const state = await this.bridge.request('YQC_REQ_GET_STATE', { mode: this.mode }, 1200);
-            if (state?.available) {
+            if (state?.available && this.isStateForCurrentVideo(state)) {
               this.mergePlayerState(state);
               await this.maybeApplyDefaults();
             }
@@ -1687,16 +1748,48 @@
       const settings = this.settingsStore.settings;
       if (!settings.enabled || !settings.autoApply) return;
       const key = this.getVideoKey();
-      if (this.appliedDefaultsForKey === key) return;
-      this.appliedDefaultsForKey = key;
 
-      if (!this.manualSpeedOverride && settings.defaultSpeed && settings.defaultSpeed !== 1.0) {
+      if (
+        !this.manualSpeedOverride &&
+        this.appliedDefaultSpeedForKey !== key &&
+        settings.defaultSpeed &&
+        settings.defaultSpeed !== 1.0
+      ) {
+        this.appliedDefaultSpeedForKey = key;
         this.applyPlaybackSpeed(settings.defaultSpeed, { markManual: false });
       }
-      if (!this.manualQualityOverride && settings.defaultQuality && settings.defaultQuality !== 'auto' && this.qualityState.available) {
+
+      if (
+        !this.manualQualityOverride &&
+        settings.defaultQuality &&
+        settings.defaultQuality !== 'auto' &&
+        this.qualityState.available &&
+        !this.isQualitySwitching &&
+        this.isStateForCurrentVideo(this.qualityState)
+      ) {
         const best = this.pickBestAvailableQuality(settings.defaultQuality, this.qualityState);
-        if (best && best !== this.qualityState.currentQuality) {
-          await this.applyVideoQuality(best, { markManual: false });
+        if (!best) return;
+
+        const alreadyAppliedThisTarget =
+          this.appliedDefaultQualityState?.key === key &&
+          this.appliedDefaultQualityState?.quality === best &&
+          !this.qualityState.isAuto;
+        const alreadyFailedThisTarget = this.failedDefaultQualityKey === `${key}:${best}`;
+
+        if (alreadyAppliedThisTarget || alreadyFailedThisTarget) {
+          return;
+        }
+
+        if (best === this.qualityState.currentQuality && !this.qualityState.isAuto) {
+          this.appliedDefaultQualityState = { key, quality: best };
+          return;
+        }
+
+        const applied = await this.applyVideoQuality(best, { markManual: false, silent: true });
+        if (applied) {
+          this.appliedDefaultQualityState = { key, quality: best };
+        } else {
+          this.failedDefaultQualityKey = `${key}:${best}`;
         }
       }
     }
@@ -1707,9 +1800,23 @@
       if (nextKey !== this.lastVideoKey) {
         this.lastVideoKey = nextKey;
         if (applyDefaultsIfNew) {
-          this.appliedDefaultsForKey = null;
+          this.appliedDefaultSpeedForKey = null;
+          this.appliedDefaultQualityState = null;
+          this.failedDefaultQualityKey = null;
           this.manualSpeedOverride = false;
           this.manualQualityOverride = false;
+          this.qualityState = {
+            available: false,
+            isLoading: true,
+            options: [],
+            autoAvailable: false,
+            currentQuality: null,
+            currentLabel: 'Auto',
+            isAuto: false,
+            preferredRates: [],
+            currentRate: null,
+            videoId: null
+          };
         }
       }
       this.ensureMounted();
