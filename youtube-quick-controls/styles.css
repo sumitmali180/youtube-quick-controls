@@ -168,6 +168,15 @@ ytd-app[dark] .yqc-root,
   display: none !important;
 }
 
+.yqc-separator {
+  flex: 0 0 auto;
+  inline-size: 0;
+  block-size: 14px;
+  border-inline-start: 1px solid var(--yqc-border);
+  margin-inline: 2px;
+  box-sizing: border-box;
+}
+
 /* Error / Fallback Tooltip */
 .yqc-tooltip {
   position: absolute;
@@ -194,11 +203,17 @@ ytd-app[dark] .yqc-root,
   display: none !important;
 }
 
-/* Video Display Modes (Fit, Stretch, Fill, Original) */
-.html5-video-player .html5-video-container:has(> video.yqc-video-display[data-yqc-display]) {
+/* Video Display Modes (Fit, Stretch, Fill, Original) & Zoom */
+.html5-video-player .html5-video-container:has(> video.yqc-video-display[data-yqc-display]),
+.html5-video-player .html5-video-container:has(> video.yqc-video-zoom) {
   position: relative !important;
   inline-size: 100% !important;
   block-size: 100% !important;
+  overflow: hidden !important;
+}
+
+.html5-video-player:has(> video.yqc-video-zoom),
+.html5-video-player:has(> .html5-video-container > video.yqc-video-zoom) {
   overflow: hidden !important;
 }
 
@@ -213,8 +228,13 @@ video.yqc-video-display[data-yqc-display='fill'] {
   max-block-size: none !important;
   inset: 0 !important;
   margin: 0 !important;
-  transform: none !important;
   object-position: center !important;
+}
+
+video.yqc-video-display[data-yqc-display='fit']:not(.yqc-video-zoom),
+video.yqc-video-display[data-yqc-display='stretch']:not(.yqc-video-zoom),
+video.yqc-video-display[data-yqc-display='fill']:not(.yqc-video-zoom) {
+  transform: none !important;
 }
 
 video.yqc-video-display[data-yqc-display='fit'] {
@@ -227,6 +247,17 @@ video.yqc-video-display[data-yqc-display='stretch'] {
 
 video.yqc-video-display[data-yqc-display='fill'] {
   object-fit: cover !important;
+}
+
+video.yqc-video-zoom {
+  transform: scale(var(--yqc-zoom-scale, 1)) !important;
+  transform-origin: center center !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  video.yqc-video-zoom {
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }
 
 /* Fullscreen & Shorts High-Contrast Scrim */
@@ -344,5 +375,9 @@ video.yqc-video-display[data-yqc-display='fill'] {
     background-color: Canvas;
     color: CanvasText;
     border: 1px solid CanvasText;
+  }
+
+  .yqc-separator {
+    border-inline-start-color: ButtonText;
   }
 }

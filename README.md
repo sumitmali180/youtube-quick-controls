@@ -1,6 +1,6 @@
 # YouTube Quick Controls (speedoq)
 
-Production-ready **Manifest V3 Chrome Extension** adding compact horizontal rows of one-click **Video Display** (`Fit`, `Stretch`, `Fill`, `Original`), **Playback Speed** (`0.25x`–`3.0x`), and **Video Quality** (`Auto`, `144p`–`2160p`) pill controls directly above YouTube's Like button across standard watch pages, fullscreen mode, and YouTube Shorts.
+Production-ready **Manifest V3 Chrome Extension** adding compact horizontal rows of one-click **Video Display** (`Fit`, `Stretch`, `Fill`, `Original`, `Zoom +`, `Zoom −`), **Playback Speed** (`0.25x`–`3.0x`), and **Video Quality** (`Auto`, `144p`–`2160p`) pill controls directly above YouTube's Like button across standard watch pages, fullscreen mode, and YouTube Shorts.
 
 ## Extension Package
 

@@ -90,10 +90,15 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   assert.match(stylesCss, /object-fit:\s*contain\s*!important/, 'Fit mode must use object-fit: contain');
   assert.match(stylesCss, /object-fit:\s*fill\s*!important/, 'Stretch mode must use object-fit: fill');
   assert.match(stylesCss, /object-fit:\s*cover\s*!important/, 'Fill mode must use object-fit: cover');
+  assert.match(stylesCss, /video\.yqc-video-zoom\s*\{[^}]*transform:\s*scale\(var\(--yqc-zoom-scale,\s*1\)\)\s*!important/s, 'styles.css must scale zoomed video via --yqc-zoom-scale');
+  assert.match(stylesCss, /video\.yqc-video-zoom\s*\{[^}]*transition:\s*transform\s+180ms/s, 'styles.css must define smooth transform transition for zoom');
   assert.equal(/popover|inset:\s*auto/.test(stylesCss), false, 'styles.css must not contain dropdown/popover rules');
 
   const contentJs = readExtFile('content.js');
   assert.match(contentJs, /const IDLE_HIDE_DELAY_MS = 2500;/);
+  assert.match(contentJs, /const ZOOM_MIN = 0\.5;/);
+  assert.match(contentJs, /const ZOOM_MAX = 2\.5;/);
+  assert.match(contentJs, /const ZOOM_STEP = 0\.1;/);
   assert.match(contentJs, /const DISPLAY_MODES = Object\.freeze/);
   assert.match(contentJs, /id:\s*'fit',\s*label:\s*'Fit'/);
   assert.match(contentJs, /id:\s*'stretch',\s*label:\s*'Stretch'/);

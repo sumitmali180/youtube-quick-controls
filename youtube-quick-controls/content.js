@@ -37,6 +37,17 @@
 
   const VALID_DISPLAY_MODES = new Set(DISPLAY_MODES.map((mode) => mode.id));
 
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2.5;
+  const ZOOM_STEP = 0.1;
+
+  function clampZoom(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 1.0;
+    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, n));
+    return Math.round(clamped * 100) / 100;
+  }
+
   const STANDARD_QUALITY_SLOTS = Object.freeze([
     { quality: 'auto', label: 'Auto', isAutoOption: true },
     { quality: 'tiny', label: '144p', isAutoOption: false },
@@ -282,6 +293,8 @@
       this.manualSpeedOverride = false;
       this.manualQualityOverride = false;
       this.displayMode = 'original';
+      this.zoomScale = 1.0;
+      this.zoomCleanupTimer = null;
       this.lastVideoKey = null;
       this.lastUrlHref = typeof location === 'object' ? location.href : '';
       this.appliedDefaultSpeedForKey = null;
@@ -400,7 +413,8 @@
             this.manualSpeedOverride = false;
             this.manualQualityOverride = false;
             this.displayMode = 'original';
-            this.applyVideoDisplayElement(this.videoEl, 'original');
+            this.zoomScale = 1.0;
+            this.applyVideoDisplayElement(this.videoEl, 'original', 1.0);
             this.renderDisplayRow();
             this.appliedDefaultsForKey = null;
             void this.fetchAndUpdateQualityState({ tryApplyDefaults: true });
@@ -521,7 +535,7 @@
 
     bindVideoElement(video) {
       if (this.videoEl === video && this.videoAbort) {
-        this.applyVideoDisplayElement(this.videoEl, this.displayMode);
+        this.applyVideoDisplayElement(this.videoEl, this.displayMode, this.zoomScale);
         return;
       }
       if (this.videoEl && this.videoEl !== video) {
@@ -536,7 +550,7 @@
         return;
       }
 
-      this.applyVideoDisplayElement(this.videoEl, this.displayMode);
+      this.applyVideoDisplayElement(this.videoEl, this.displayMode, this.zoomScale);
 
       this.videoAbort = new AbortController();
       const { signal } = this.videoAbort;
@@ -1456,19 +1470,50 @@
 
     clearVideoDisplayOverrides(video) {
       if (!video) return;
-      video.classList.remove('yqc-video-display');
+      clearTimeout(this.zoomCleanupTimer);
+      this.zoomCleanupTimer = null;
+      video.classList.remove('yqc-video-display', 'yqc-video-zoom');
       delete video.dataset.yqcDisplay;
+      delete video.dataset.yqcZoom;
+      video.style.removeProperty('--yqc-zoom-scale');
     }
 
-    applyVideoDisplayElement(video, modeId = this.displayMode) {
+    applyVideoDisplayElement(video, modeId = this.displayMode, zoomScale = this.zoomScale) {
       if (!video) return;
       const mode = VALID_DISPLAY_MODES.has(modeId) ? modeId : 'original';
       if (mode === 'original') {
-        this.clearVideoDisplayOverrides(video);
+        video.classList.remove('yqc-video-display');
+        delete video.dataset.yqcDisplay;
+      } else {
+        video.classList.add('yqc-video-display');
+        video.dataset.yqcDisplay = mode;
+      }
+
+      const zoom = clampZoom(zoomScale);
+      clearTimeout(this.zoomCleanupTimer);
+      this.zoomCleanupTimer = null;
+
+      if (Math.abs(zoom - 1.0) < 0.001) {
+        if (video.classList.contains('yqc-video-zoom')) {
+          delete video.dataset.yqcZoom;
+          video.style.setProperty('--yqc-zoom-scale', '1');
+          this.zoomCleanupTimer = setTimeout(() => {
+            this.zoomCleanupTimer = null;
+            if (Math.abs(this.zoomScale - 1.0) < 0.001 && this.videoEl === video) {
+              video.classList.remove('yqc-video-zoom');
+              video.style.removeProperty('--yqc-zoom-scale');
+            }
+          }, 220);
+        } else {
+          delete video.dataset.yqcZoom;
+          video.style.removeProperty('--yqc-zoom-scale');
+        }
         return;
       }
-      video.classList.add('yqc-video-display');
-      video.dataset.yqcDisplay = mode;
+
+      video.classList.add('yqc-video-zoom');
+      video.dataset.yqcZoom = String(zoom);
+      video.style.setProperty('--yqc-zoom-scale', String(zoom));
     }
 
     renderDisplayRow() {
@@ -1476,10 +1521,36 @@
       if (!displayRow) return;
 
       const activeMode = VALID_DISPLAY_MODES.has(this.displayMode) ? this.displayMode : 'original';
+      const zoom = clampZoom(this.zoomScale);
+      const zoomPercent = Math.round(zoom * 100);
+      const canZoomIn = zoom < ZOOM_MAX - 0.001;
+      const canZoomOut = zoom > ZOOM_MIN + 0.001;
+
       const existingButtons = Array.from(displayRow.querySelectorAll('button.yqc-chip-display'));
+      const existingZoomIn = displayRow.querySelector('button.yqc-chip-zoom[data-yqc-zoom="in"]');
+      const existingZoomOut = displayRow.querySelector('button.yqc-chip-zoom[data-yqc-zoom="out"]');
       const canUpdateInPlace =
         existingButtons.length === DISPLAY_MODES.length &&
-        existingButtons.every((btn, idx) => btn.dataset.yqcDisplayMode === DISPLAY_MODES[idx].id);
+        existingButtons.every((btn, idx) => btn.dataset.yqcDisplayMode === DISPLAY_MODES[idx].id) &&
+        Boolean(existingZoomIn && existingZoomOut);
+
+      const syncZoomBtnProps = (btn, direction) => {
+        if (direction === 'in') {
+          if (canZoomIn) {
+            btn.removeAttribute('aria-disabled');
+            btn.title = `Zoom in (${zoomPercent}%)`;
+          } else {
+            btn.setAttribute('aria-disabled', 'true');
+            btn.title = `Maximum zoom reached (${zoomPercent}%)`;
+          }
+        } else if (canZoomOut) {
+          btn.removeAttribute('aria-disabled');
+          btn.title = `Zoom out (${zoomPercent}%)`;
+        } else {
+          btn.setAttribute('aria-disabled', 'true');
+          btn.title = `Minimum zoom reached (${zoomPercent}%)`;
+        }
+      };
 
       if (canUpdateInPlace) {
         for (let idx = 0; idx < existingButtons.length; idx += 1) {
@@ -1488,13 +1559,17 @@
           btn.classList.toggle('yqc-is-active', isActive);
           btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         }
+        syncZoomBtnProps(existingZoomIn, 'in');
+        syncZoomBtnProps(existingZoomOut, 'out');
         return;
       }
 
-      const focusedMode =
+      const focusedEl =
         document.activeElement && displayRow.contains(document.activeElement)
-          ? document.activeElement.dataset?.yqcDisplayMode || null
+          ? document.activeElement
           : null;
+      const focusedMode = focusedEl?.dataset?.yqcDisplayMode || null;
+      const focusedZoom = focusedEl?.dataset?.yqcZoom || null;
 
       displayRow.replaceChildren();
       let restoredFocusBtn = null;
@@ -1525,6 +1600,38 @@
         }
       }
 
+      const separator = document.createElement('span');
+      separator.className = 'yqc-separator';
+      separator.setAttribute('role', 'separator');
+      separator.setAttribute('aria-orientation', 'vertical');
+      displayRow.appendChild(separator);
+
+      const zoomDefs = [
+        { direction: 'in', label: 'Zoom +', ariaLabel: 'Zoom in', delta: ZOOM_STEP },
+        { direction: 'out', label: 'Zoom −', ariaLabel: 'Zoom out', delta: -ZOOM_STEP }
+      ];
+
+      for (const def of zoomDefs) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'yqc-chip yqc-chip-zoom';
+        btn.dataset.yqcZoom = def.direction;
+        btn.textContent = def.label;
+        btn.setAttribute('aria-label', def.ariaLabel);
+        syncZoomBtnProps(btn, def.direction);
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (btn.getAttribute('aria-disabled') === 'true') return;
+          this.adjustZoom(def.delta);
+        });
+
+        displayRow.appendChild(btn);
+        if (focusedZoom && def.direction === focusedZoom) {
+          restoredFocusBtn = btn;
+        }
+      }
+
       if (restoredFocusBtn) {
         restoredFocusBtn.focus();
       }
@@ -1540,7 +1647,24 @@
       const video = this.findActiveVideo(this.mode) || this.videoEl;
       if (video) {
         this.bindVideoElement(video);
-        this.applyVideoDisplayElement(video, normalized);
+        this.applyVideoDisplayElement(video, normalized, this.zoomScale);
+      }
+      this.renderDisplayRow();
+      return true;
+    }
+
+    adjustZoom(delta) {
+      const current = clampZoom(this.zoomScale);
+      const next = clampZoom(current + Number(delta || 0));
+      if (Math.abs(next - current) < 0.001) {
+        this.renderDisplayRow();
+        return false;
+      }
+      this.zoomScale = next;
+      const video = this.findActiveVideo(this.mode) || this.videoEl;
+      if (video) {
+        this.bindVideoElement(video);
+        this.applyVideoDisplayElement(video, this.displayMode, next);
       }
       this.renderDisplayRow();
       return true;
@@ -1917,6 +2041,7 @@
           this.manualSpeedOverride = false;
           this.manualQualityOverride = false;
           this.displayMode = 'original';
+          this.zoomScale = 1.0;
           this.clearVideoDisplayOverrides(this.videoEl);
           this.qualityState = {
             available: false,
@@ -1948,6 +2073,8 @@
       this.stopFullscreenKeepalive();
       this.clearQualityTimers();
       clearTimeout(this.tooltipTimer);
+      clearTimeout(this.zoomCleanupTimer);
+      this.zoomCleanupTimer = null;
 
       if (this.activityAbort) {
         this.activityAbort.abort();

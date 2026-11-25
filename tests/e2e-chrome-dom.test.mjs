@@ -519,7 +519,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.ok(watchLayout.speedDims[0] >= 24 && watchLayout.speedDims[1] >= 24);
     assert.ok(watchLayout.qualityDims[0] >= 24 && watchLayout.qualityDims[1] >= 24);
     assert.equal(watchLayout.likeClicks, 1, 'Native Like button click handler must stay intact');
-    assert.deepEqual(watchLayout.displayLabels, ['Fit', 'Stretch', 'Fill', 'Original']);
+    assert.deepEqual(watchLayout.displayLabels, ['Fit', 'Stretch', 'Fill', 'Original', 'Zoom +', 'Zoom −']);
     assert.deepEqual(watchLayout.speedLabels, ['0.25x', '0.5x', '0.75x', '1.0x', '1.15x', '1.25x', '1.5x', '1.75x', '2.0x', '2.5x', '3.0x']);
     assert.deepEqual(watchLayout.qualityLabels, ['Auto', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p']);
     assert.equal(watchLayout.activeDisplayLabel, 'Original');
@@ -528,7 +528,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(watchLayout.activeQualityTitle, 'Auto (720p)');
 
     // 1b. One-click Video Display controls (Fit, Stretch, Fill, Original) instant scaling + active indicator + zero interference
-    const displayRes = await evalInPage(chrome.cdp, sessionId, `(() => {
+    const displayRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
       const video = document.querySelector('#movie_player video');
       // Simulate YouTube native inline sizing so we prove display modes override it and Original restores it.
       video.style.width = '640px';
@@ -556,7 +556,64 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const stretch = clickAndMeasure('stretch');
       const fill = clickAndMeasure('fill');
       const original = clickAndMeasure('original');
-      // Leave Fill active into Fullscreen test to verify persistence across fullscreen transitions.
+
+      // Test Zoom + / Zoom - incremental scaling, smooth transition, mode preservation & clamping bounds
+      const zoomInBtn = displayRow.querySelector('[data-yqc-zoom="in"]');
+      const zoomOutBtn = displayRow.querySelector('[data-yqc-zoom="out"]');
+      const player = document.getElementById('movie_player');
+      const host = document.getElementById('yqc-controls-host');
+      const hostRectBeforeZoom = host.getBoundingClientRect();
+
+      // Select Fit mode first, then zoom in twice (1.0 -> 1.1 -> 1.2)
+      displayRow.querySelector('[data-yqc-display-mode="fit"]').click();
+      zoomInBtn.click();
+      zoomInBtn.click();
+      await new Promise(r => setTimeout(r, 240));
+      const zoomedFit = {
+        displayMode: video.dataset.yqcDisplay,
+        objectFit: getComputedStyle(video).objectFit,
+        zoomAttr: video.dataset.yqcZoom,
+        transform: getComputedStyle(video).transform,
+        transitionProp: getComputedStyle(video).transitionProperty,
+        playerOverflow: getComputedStyle(player).overflow,
+        hostUnchanged: Math.round(host.getBoundingClientRect().width) === Math.round(hostRectBeforeZoom.width),
+        zoomInHasPressed: zoomInBtn.hasAttribute('aria-pressed'),
+        zoomOutHasPressed: zoomOutBtn.hasAttribute('aria-pressed')
+      };
+
+      // Switch to Stretch while zoomed -> display mode changes while zoom remains 1.2
+      displayRow.querySelector('[data-yqc-display-mode="stretch"]').click();
+      const zoomedStretch = {
+        displayMode: video.dataset.yqcDisplay,
+        objectFit: getComputedStyle(video).objectFit,
+        zoomAttr: video.dataset.yqcZoom
+      };
+
+      // Clamp at max zoom (2.5x) -> Zoom + becomes aria-disabled="true" and ignores extra clicks
+      for (let i = 0; i < 20; i += 1) zoomInBtn.click();
+      await new Promise(r => setTimeout(r, 60));
+      const maxClamped = {
+        zoomAttr: video.dataset.yqcZoom,
+        zoomInDisabled: zoomInBtn.getAttribute('aria-disabled'),
+        zoomOutDisabled: zoomOutBtn.getAttribute('aria-disabled')
+      };
+
+      // Clamp at min zoom (0.5x) -> Zoom - becomes aria-disabled="true" and ignores extra clicks
+      for (let i = 0; i < 25; i += 1) zoomOutBtn.click();
+      await new Promise(r => setTimeout(r, 60));
+      const minClamped = {
+        zoomAttr: video.dataset.yqcZoom,
+        zoomInDisabled: zoomInBtn.getAttribute('aria-disabled'),
+        zoomOutDisabled: zoomOutBtn.getAttribute('aria-disabled')
+      };
+
+      // Step back to 1.0x (5 steps up from 0.5 -> 1.0) and leave Fill active at 1.0x for Fullscreen test
+      for (let i = 0; i < 5; i += 1) zoomInBtn.click();
+      await new Promise(r => setTimeout(r, 260));
+      const backToNormal = {
+        zoomAttr: video.dataset.yqcZoom || null,
+        hasZoomClass: video.classList.contains('yqc-video-zoom')
+      };
       const fillForFs = clickAndMeasure('fill');
 
       return {
@@ -564,6 +621,11 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         stretch,
         fill,
         original,
+        zoomedFit,
+        zoomedStretch,
+        maxClamped,
+        minClamped,
+        backToNormal,
         fillForFs,
         playerClicks: window.__TEST_STATE__.playerClicks
       };
@@ -595,8 +657,33 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(displayRes.original.height, '360px');
     assert.deepEqual(displayRes.original.pressedButtons, ['original']);
 
+    assert.equal(displayRes.zoomedFit.displayMode, 'fit');
+    assert.equal(displayRes.zoomedFit.objectFit, 'contain', 'Zoom must maintain active Fit display mode');
+    assert.equal(displayRes.zoomedFit.zoomAttr, '1.2');
+    assert.match(displayRes.zoomedFit.transform, /matrix\(1\.2,\s*0,\s*0,\s*1\.2,\s*0,\s*0\)/);
+    assert.match(displayRes.zoomedFit.transitionProp, /transform/);
+    assert.equal(displayRes.zoomedFit.playerOverflow, 'hidden');
+    assert.equal(displayRes.zoomedFit.hostUnchanged, true, 'Zooming video must not affect surrounding player controls');
+    assert.equal(displayRes.zoomedFit.zoomInHasPressed, false);
+    assert.equal(displayRes.zoomedFit.zoomOutHasPressed, false);
+
+    assert.equal(displayRes.zoomedStretch.displayMode, 'stretch');
+    assert.equal(displayRes.zoomedStretch.objectFit, 'fill');
+    assert.equal(displayRes.zoomedStretch.zoomAttr, '1.2', 'Switching display mode must preserve active zoom');
+
+    assert.equal(displayRes.maxClamped.zoomAttr, '2.5');
+    assert.equal(displayRes.maxClamped.zoomInDisabled, 'true', 'Zoom + must disable at max bound');
+    assert.equal(displayRes.maxClamped.zoomOutDisabled, null);
+
+    assert.equal(displayRes.minClamped.zoomAttr, '0.5');
+    assert.equal(displayRes.minClamped.zoomOutDisabled, 'true', 'Zoom - must disable at min bound');
+    assert.equal(displayRes.minClamped.zoomInDisabled, null);
+
+    assert.equal(displayRes.backToNormal.zoomAttr, null);
+    assert.equal(displayRes.backToNormal.hasZoomClass, false);
+
     assert.equal(displayRes.fillForFs.modeAttr, 'fill');
-    assert.equal(displayRes.playerClicks, 0, 'Display control clicks must not bubble to #movie_player');
+    assert.equal(displayRes.playerClicks, 0, 'Display and zoom control clicks must not bubble to #movie_player');
 
     // 2. One-click speed pills, custom YouTube-exposed rate, external ratechange sync, keyboard navigation & propagation isolation
     const speedRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
