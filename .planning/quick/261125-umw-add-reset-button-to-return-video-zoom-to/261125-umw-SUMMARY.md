@@ -25,3 +25,4 @@ files_modified:
 ## Verification
 
 - `node --check youtube-quick-controls/*.js && ! grep -rnE "TODO|FIXME" youtube-quick-controls/ && node --test tests/*.test.mjs`: 6/6 tests passed (0 failed, 0 skipped).
+
