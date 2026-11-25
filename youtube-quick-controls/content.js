@@ -28,6 +28,15 @@
 
   const STANDARD_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 
+  const DISPLAY_MODES = Object.freeze([
+    { id: 'fit', label: 'Fit', title: 'Fit video inside player (preserve aspect ratio)' },
+    { id: 'stretch', label: 'Stretch', title: 'Stretch video to fill player' },
+    { id: 'fill', label: 'Fill', title: 'Fill player and crop excess (preserve aspect ratio)' },
+    { id: 'original', label: 'Original', title: 'Original YouTube video scaling' }
+  ]);
+
+  const VALID_DISPLAY_MODES = new Set(DISPLAY_MODES.map((mode) => mode.id));
+
   const STANDARD_QUALITY_SLOTS = Object.freeze([
     { quality: 'auto', label: 'Auto', isAutoOption: true },
     { quality: 'tiny', label: '144p', isAutoOption: false },
@@ -272,6 +281,7 @@
       this.pendingQualityTarget = null;
       this.manualSpeedOverride = false;
       this.manualQualityOverride = false;
+      this.displayMode = 'original';
       this.lastVideoKey = null;
       this.lastUrlHref = typeof location === 'object' ? location.href : '';
       this.appliedDefaultSpeedForKey = null;
@@ -389,6 +399,9 @@
           if (this.mode === 'shorts' && this.videoEl && this.videoEl !== prevVideo) {
             this.manualSpeedOverride = false;
             this.manualQualityOverride = false;
+            this.displayMode = 'original';
+            this.applyVideoDisplayElement(this.videoEl, 'original');
+            this.renderDisplayRow();
             this.appliedDefaultsForKey = null;
             void this.fetchAndUpdateQualityState({ tryApplyDefaults: true });
           }
@@ -508,7 +521,11 @@
 
     bindVideoElement(video) {
       if (this.videoEl === video && this.videoAbort) {
+        this.applyVideoDisplayElement(this.videoEl, this.displayMode);
         return;
+      }
+      if (this.videoEl && this.videoEl !== video) {
+        this.clearVideoDisplayOverrides(this.videoEl);
       }
       if (this.videoAbort) {
         this.videoAbort.abort();
@@ -518,6 +535,8 @@
       if (!this.videoEl) {
         return;
       }
+
+      this.applyVideoDisplayElement(this.videoEl, this.displayMode);
 
       this.videoAbort = new AbortController();
       const { signal } = this.videoAbort;
@@ -1161,6 +1180,7 @@
         { signal }
       );
 
+      const displayRow = this.buildRowGroup('yqc-display-row', 'yqc-row-display', 'Video display');
       const speedRow = this.buildRowGroup('yqc-speed-row', 'yqc-row-speed', 'Playback speed');
       const qualityRow = this.buildRowGroup('yqc-quality-row', 'yqc-row-quality', 'Video quality');
 
@@ -1182,7 +1202,7 @@
       const tooltipText = document.createElement('span');
       tooltip.append(tooltipIcon, tooltipText);
 
-      host.append(speedRow, qualityRow, tooltip);
+      host.append(displayRow, speedRow, qualityRow, tooltip);
 
       if (anchor.referenceNode && anchor.referenceNode.parentElement === anchor.mountParent) {
         anchor.mountParent.insertBefore(host, anchor.referenceNode);
@@ -1194,6 +1214,7 @@
 
       this.hostEl = host;
       this.ui = {
+        displayRow,
         speedRow,
         qualityRow,
         qualityStatus,
@@ -1217,6 +1238,7 @@
         }
       }
 
+      this.renderDisplayRow();
       this.renderSpeedRow();
       this.renderQualityRow();
       this.syncRovingTabIndex(host);
@@ -1291,17 +1313,14 @@
           } else if (event.key === 'End') {
             nextTarget = items[items.length - 1];
           } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            const speedChips = Array.from(
-              this.ui?.speedRow?.querySelectorAll('button.yqc-chip') || []
-            );
-            const qualityChips = Array.from(
-              this.ui?.qualityRow?.querySelectorAll('button.yqc-chip') || []
-            );
-            const inSpeed = speedChips.includes(target);
-            const sourceRow = inSpeed ? speedChips : qualityChips;
-            const destRow = inSpeed ? qualityChips : speedChips;
-            if (destRow.length > 0) {
-              const colIdx = Math.max(0, sourceRow.indexOf(target));
+            const rows = Array.from(host.querySelectorAll('.yqc-row'))
+              .map((row) => Array.from(row.querySelectorAll('button.yqc-chip')))
+              .filter((chips) => chips.length > 0);
+            const sourceIdx = rows.findIndex((chips) => chips.includes(target));
+            if (sourceIdx !== -1 && rows.length > 1) {
+              const delta = event.key === 'ArrowDown' ? 1 : -1;
+              const destRow = rows[(sourceIdx + delta + rows.length) % rows.length];
+              const colIdx = Math.max(0, rows[sourceIdx].indexOf(target));
               nextTarget = destRow[Math.min(colIdx, destRow.length - 1)];
             }
           }
@@ -1433,6 +1452,98 @@
       if (!this.ui?.speedRow) return;
       if (clampSpeed(rate) === null) return;
       this.renderSpeedRow();
+    }
+
+    clearVideoDisplayOverrides(video) {
+      if (!video) return;
+      video.classList.remove('yqc-video-display');
+      delete video.dataset.yqcDisplay;
+    }
+
+    applyVideoDisplayElement(video, modeId = this.displayMode) {
+      if (!video) return;
+      const mode = VALID_DISPLAY_MODES.has(modeId) ? modeId : 'original';
+      if (mode === 'original') {
+        this.clearVideoDisplayOverrides(video);
+        return;
+      }
+      video.classList.add('yqc-video-display');
+      video.dataset.yqcDisplay = mode;
+    }
+
+    renderDisplayRow() {
+      const displayRow = this.ui?.displayRow;
+      if (!displayRow) return;
+
+      const activeMode = VALID_DISPLAY_MODES.has(this.displayMode) ? this.displayMode : 'original';
+      const existingButtons = Array.from(displayRow.querySelectorAll('button.yqc-chip-display'));
+      const canUpdateInPlace =
+        existingButtons.length === DISPLAY_MODES.length &&
+        existingButtons.every((btn, idx) => btn.dataset.yqcDisplayMode === DISPLAY_MODES[idx].id);
+
+      if (canUpdateInPlace) {
+        for (let idx = 0; idx < existingButtons.length; idx += 1) {
+          const btn = existingButtons[idx];
+          const isActive = DISPLAY_MODES[idx].id === activeMode;
+          btn.classList.toggle('yqc-is-active', isActive);
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+        return;
+      }
+
+      const focusedMode =
+        document.activeElement && displayRow.contains(document.activeElement)
+          ? document.activeElement.dataset?.yqcDisplayMode || null
+          : null;
+
+      displayRow.replaceChildren();
+      let restoredFocusBtn = null;
+
+      for (const mode of DISPLAY_MODES) {
+        const isActive = mode.id === activeMode;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'yqc-chip yqc-chip-display';
+        btn.dataset.yqcDisplayMode = mode.id;
+        btn.textContent = mode.label;
+        btn.title = mode.title;
+        btn.setAttribute('aria-label', `Video display ${mode.label}`);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        if (isActive) {
+          btn.classList.add('yqc-is-active');
+        }
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (btn.getAttribute('aria-disabled') === 'true') return;
+          this.applyDisplayMode(mode.id);
+        });
+
+        displayRow.appendChild(btn);
+        if (focusedMode && mode.id === focusedMode) {
+          restoredFocusBtn = btn;
+        }
+      }
+
+      if (restoredFocusBtn) {
+        restoredFocusBtn.focus();
+      }
+      this.syncRovingTabIndex(this.hostEl);
+      if (this.hostEl?.isConnected && this.activeAnchor) {
+        this.alignHostWithAnchor(this.hostEl, this.activeAnchor);
+      }
+    }
+
+    applyDisplayMode(modeId) {
+      const normalized = VALID_DISPLAY_MODES.has(modeId) ? modeId : 'original';
+      this.displayMode = normalized;
+      const video = this.findActiveVideo(this.mode) || this.videoEl;
+      if (video) {
+        this.bindVideoElement(video);
+        this.applyVideoDisplayElement(video, normalized);
+      }
+      this.renderDisplayRow();
+      return true;
     }
 
     getQualitySlots(q) {
@@ -1805,6 +1916,8 @@
           this.failedDefaultQualityKey = null;
           this.manualSpeedOverride = false;
           this.manualQualityOverride = false;
+          this.displayMode = 'original';
+          this.clearVideoDisplayOverrides(this.videoEl);
           this.qualityState = {
             available: false,
             isLoading: true,
@@ -1820,10 +1933,12 @@
         }
       }
       this.ensureMounted();
+      this.renderDisplayRow();
       void this.fetchAndUpdateQualityState({ tryApplyDefaults: applyDefaultsIfNew });
     }
 
     unmountControls() {
+      this.clearVideoDisplayOverrides(this.videoEl);
       this.pendingQualityTarget = null;
       this.isPointerInsideHost = false;
       this.isPointerDownInsideHost = false;

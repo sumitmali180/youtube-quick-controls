@@ -85,10 +85,19 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
   assert.match(stylesCss, /\.yqc-root\[data-yqc-idle='true'\]:not\(:has\(:focus-visible\)\)/, 'styles.css must fade idle controls while preserving keyboard focus visibility');
   assert.match(stylesCss, /transition:\s*opacity\s+140ms\s+ease-out/, 'styles.css must define smooth opacity fade-in inside prefers-reduced-motion');
   assert.match(stylesCss, /transition:\s*opacity\s+280ms\s+ease-in/, 'styles.css must define smooth opacity fade-out inside prefers-reduced-motion');
+  assert.match(stylesCss, /video\.yqc-video-display\[data-yqc-display='fit'\]/, 'styles.css must style Fit display mode');
+  assert.match(stylesCss, /object-fit:\s*contain\s*!important/, 'Fit mode must use object-fit: contain');
+  assert.match(stylesCss, /object-fit:\s*fill\s*!important/, 'Stretch mode must use object-fit: fill');
+  assert.match(stylesCss, /object-fit:\s*cover\s*!important/, 'Fill mode must use object-fit: cover');
   assert.equal(/popover|inset:\s*auto/.test(stylesCss), false, 'styles.css must not contain dropdown/popover rules');
 
   const contentJs = readExtFile('content.js');
   assert.match(contentJs, /const IDLE_HIDE_DELAY_MS = 2500;/);
+  assert.match(contentJs, /const DISPLAY_MODES = Object\.freeze/);
+  assert.match(contentJs, /id:\s*'fit',\s*label:\s*'Fit'/);
+  assert.match(contentJs, /id:\s*'stretch',\s*label:\s*'Stretch'/);
+  assert.match(contentJs, /id:\s*'fill',\s*label:\s*'Fill'/);
+  assert.match(contentJs, /id:\s*'original',\s*label:\s*'Original'/);
   assert.match(contentJs, /'role', 'toolbar'/);
   assert.match(contentJs, /'focusgroup', 'toolbar wrap'/);
   assert.match(contentJs, /'role', 'group'/);

@@ -185,6 +185,41 @@ ytd-app[dark] .yqc-root,
   display: none !important;
 }
 
+/* Video Display Modes (Fit, Stretch, Fill, Original) */
+.html5-video-player .html5-video-container:has(> video.yqc-video-display[data-yqc-display]) {
+  position: relative !important;
+  inline-size: 100% !important;
+  block-size: 100% !important;
+  overflow: hidden !important;
+}
+
+video.yqc-video-display[data-yqc-display='fit'],
+video.yqc-video-display[data-yqc-display='stretch'],
+video.yqc-video-display[data-yqc-display='fill'] {
+  inline-size: 100% !important;
+  block-size: 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-inline-size: none !important;
+  max-block-size: none !important;
+  inset: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+  object-position: center !important;
+}
+
+video.yqc-video-display[data-yqc-display='fit'] {
+  object-fit: contain !important;
+}
+
+video.yqc-video-display[data-yqc-display='stretch'] {
+  object-fit: fill !important;
+}
+
+video.yqc-video-display[data-yqc-display='fill'] {
+  object-fit: cover !important;
+}
+
 /* Fullscreen & Shorts High-Contrast Scrim */
 .yqc-root[data-yqc-mode='fullscreen'],
 .yqc-root[data-yqc-mode='shorts'] {

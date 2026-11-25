@@ -1,14 +1,21 @@
 # YouTube Quick Controls
 
-A lightweight **Manifest V3 Chrome Extension** that adds two compact horizontal rows of **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill buttons directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts** — eliminating dropdowns and nested gear-menu clicks without intercepting network streams or modifying native YouTube buttons.
+A lightweight **Manifest V3 Chrome Extension** that adds compact horizontal rows of **Video Display** (`Fit`, `Stretch`, `Fill`, `Original`), **Playback Speed** (`0.25x`–`3.0x`), and **Video Quality** (`Auto`, `144p`–`2160p`) pill buttons directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts** — eliminating dropdowns and nested gear-menu clicks without intercepting network streams or modifying native YouTube buttons.
 
 ---
 
 ## Features
 
-- **Directly Above the Like Button (Two Compact Horizontal Rows):** Anchors cleanly above YouTube's action bar aligned with the Like button:
-  - **Row 1 – Playback Speed:** `[ 0.25x ] [ 0.5x ] [ 0.75x ] [ 1.0x ] [ 1.25x ] [ 1.5x ] [ 1.75x ] [ 2.0x ] [ 2.5x ] [ 3.0x ]`
-  - **Row 2 – Video Quality:** `[ Auto ] [ 144p ] [ 240p ] [ 360p ] [ 480p ] [ 720p ] [ 1080p ] [ 1440p ] [ 2160p ]`
+- **Directly Above the Like Button (Compact Horizontal Rows):** Anchors cleanly above YouTube's action bar aligned with the Like button:
+  - **Row 1 – Video Display:** `[ Fit ] [ Stretch ] [ Fill ] [ Original ]`
+  - **Row 2 – Playback Speed:** `[ 0.25x ] [ 0.5x ] [ 0.75x ] [ 1.0x ] [ 1.25x ] [ 1.5x ] [ 1.75x ] [ 2.0x ] [ 2.5x ] [ 3.0x ]`
+  - **Row 3 – Video Quality:** `[ Auto ] [ 144p ] [ 240p ] [ 360p ] [ 480p ] [ 720p ] [ 1080p ] [ 1440p ] [ 2160p ]`
+- **One-Click Video Display Modes (`Fit`, `Stretch`, `Fill`, `Original`):**
+  - **Fit** (`object-fit: contain`): Scales the video proportionally to fit within the player frame without cropping.
+  - **Stretch** (`object-fit: fill`): Stretches video width and height to fill 100% of the player frame.
+  - **Fill** (`object-fit: cover`): Scales the video proportionally to cover the entire player frame, cropping excess edges.
+  - **Original**: Restores YouTube's native untouched video sizing and aspect ratio.
+  - Applies immediately on click with a clear active-state indicator (`aria-pressed="true"`), persists across fullscreen toggles on the same video, and never interferes with native YouTube controls.
 - **One-Click Instant Playback Speed Control:**
   - Standard presets: `0.25x`, `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, `2.0x`, `2.5x`, `3.0x` (plus any additional speeds exposed dynamically by YouTube or set externally/via popup).
   - Applies immediately in a single click via `video.playbackRate` without pausing, seeking, or restarting playback, highlighting the active speed pill (`aria-pressed="true"`).

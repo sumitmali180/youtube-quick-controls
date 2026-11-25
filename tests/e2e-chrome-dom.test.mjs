@@ -441,21 +441,26 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     await evalInPage(chrome.cdp, sessionId, contentJs);
     await new Promise((r) => setTimeout(r, 150));
 
-    // 1. Watch-page placement directly above Like button + two horizontal pill rows + target dimensions >= 24px
+    // 1. Watch-page placement directly above Like button + three horizontal pill rows (Display, Speed, Quality) + target dimensions >= 24px
     const watchLayout = await evalInPage(chrome.cdp, sessionId, `(() => {
       const hosts = document.querySelectorAll('#yqc-controls-host');
       const host = hosts[0];
       const likeBtn = document.getElementById('watch-like-btn');
+      const displayRow = document.getElementById('yqc-display-row');
       const speedRow = document.getElementById('yqc-speed-row');
       const qualityRow = document.getElementById('yqc-quality-row');
+      const displayBtns = Array.from(displayRow.querySelectorAll('button.yqc-chip'));
       const speedBtns = Array.from(speedRow.querySelectorAll('button.yqc-chip'));
       const qualityBtns = Array.from(qualityRow.querySelectorAll('button.yqc-chip'));
+      const activeDisplay = displayBtns.find(b => b.getAttribute('aria-pressed') === 'true');
       const activeSpeed = speedBtns.find(b => b.getAttribute('aria-pressed') === 'true');
       const activeQuality = qualityBtns.find(b => b.getAttribute('aria-pressed') === 'true');
       const hRect = host.getBoundingClientRect();
+      const dRowRect = displayRow.getBoundingClientRect();
       const sRowRect = speedRow.getBoundingClientRect();
       const qRowRect = qualityRow.getBoundingClientRect();
       const lRect = likeBtn.getBoundingClientRect();
+      const dRect = displayBtns[0].getBoundingClientRect();
       const sRect = speedBtns[0].getBoundingClientRect();
       const qRect = qualityBtns[0].getBoundingClientRect();
       likeBtn.click();
@@ -464,19 +469,25 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         mode: host.dataset.yqcMode,
         role: host.getAttribute('role'),
         focusgroup: host.getAttribute('focusgroup'),
+        displayGroupRole: displayRow.getAttribute('role'),
         speedGroupRole: speedRow.getAttribute('role'),
         qualityGroupRole: qualityRow.getAttribute('role'),
         hostBottom: Math.round(hRect.bottom),
         likeTop: Math.round(lRect.top),
+        displayRowBottom: Math.round(dRowRect.bottom),
+        speedRowTop: Math.round(sRowRect.top),
         speedRowBottom: Math.round(sRowRect.bottom),
         qualityRowTop: Math.round(qRowRect.top),
         hostLeft: Math.round(hRect.left),
         likeLeft: Math.round(lRect.left),
+        displayLabels: displayBtns.map(b => b.textContent.trim()),
         speedLabels: speedBtns.map(b => b.textContent.trim()),
         qualityLabels: qualityBtns.map(b => b.textContent.trim()),
+        activeDisplayLabel: activeDisplay?.textContent.trim(),
         activeSpeedLabel: activeSpeed?.textContent.trim(),
         activeQualityLabel: activeQuality?.textContent.trim(),
         activeQualityTitle: activeQuality?.title,
+        displayDims: [Math.round(dRect.width), Math.round(dRect.height)],
         speedDims: [Math.round(sRect.width), Math.round(sRect.height)],
         qualityDims: [Math.round(qRect.width), Math.round(qRect.height)],
         likeClicks: window.__TEST_STATE__.likeClicks
@@ -487,19 +498,95 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(watchLayout.mode, 'watch');
     assert.equal(watchLayout.role, 'toolbar');
     assert.equal(watchLayout.focusgroup, 'toolbar wrap');
+    assert.equal(watchLayout.displayGroupRole, 'group');
     assert.equal(watchLayout.speedGroupRole, 'group');
     assert.equal(watchLayout.qualityGroupRole, 'group');
+    assert.ok(watchLayout.displayRowBottom <= watchLayout.speedRowTop + 2, 'Display pills must sit directly above Speed pills');
     assert.ok(watchLayout.speedRowBottom <= watchLayout.qualityRowTop + 2, 'Row 1 speed pills must sit directly above Row 2 quality pills');
     assert.ok(watchLayout.hostBottom <= watchLayout.likeTop + 1, `Controls must render ABOVE Like button (${watchLayout.hostBottom} <= ${watchLayout.likeTop})`);
     assert.ok(Math.abs(watchLayout.hostLeft - watchLayout.likeLeft) <= 10, 'Controls must align with Like button left edge');
+    assert.ok(watchLayout.displayDims[0] >= 24 && watchLayout.displayDims[1] >= 24);
     assert.ok(watchLayout.speedDims[0] >= 24 && watchLayout.speedDims[1] >= 24);
     assert.ok(watchLayout.qualityDims[0] >= 24 && watchLayout.qualityDims[1] >= 24);
     assert.equal(watchLayout.likeClicks, 1, 'Native Like button click handler must stay intact');
+    assert.deepEqual(watchLayout.displayLabels, ['Fit', 'Stretch', 'Fill', 'Original']);
     assert.deepEqual(watchLayout.speedLabels, ['0.25x', '0.5x', '0.75x', '1.0x', '1.15x', '1.25x', '1.5x', '1.75x', '2.0x', '2.5x', '3.0x']);
     assert.deepEqual(watchLayout.qualityLabels, ['Auto', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p']);
+    assert.equal(watchLayout.activeDisplayLabel, 'Original');
     assert.equal(watchLayout.activeSpeedLabel, '1.0x');
     assert.equal(watchLayout.activeQualityLabel, 'Auto');
     assert.equal(watchLayout.activeQualityTitle, 'Auto (720p)');
+
+    // 1b. One-click Video Display controls (Fit, Stretch, Fill, Original) instant scaling + active indicator + zero interference
+    const displayRes = await evalInPage(chrome.cdp, sessionId, `(() => {
+      const video = document.querySelector('#movie_player video');
+      // Simulate YouTube native inline sizing so we prove display modes override it and Original restores it.
+      video.style.width = '640px';
+      video.style.height = '360px';
+      video.style.left = '80px';
+      video.style.top = '45px';
+      const displayRow = document.getElementById('yqc-display-row');
+
+      const clickAndMeasure = (modeId) => {
+        displayRow.querySelector(\`[data-yqc-display-mode="\${modeId}"]\`).click();
+        const cs = getComputedStyle(video);
+        const pressedButtons = Array.from(displayRow.querySelectorAll('[aria-pressed="true"]')).map(b => b.dataset.yqcDisplayMode);
+        return {
+          modeAttr: video.dataset.yqcDisplay || null,
+          hasClass: video.classList.contains('yqc-video-display'),
+          objectFit: cs.objectFit,
+          width: cs.width,
+          height: cs.height,
+          inlineWidth: video.style.width,
+          pressedButtons
+        };
+      };
+
+      const fit = clickAndMeasure('fit');
+      const stretch = clickAndMeasure('stretch');
+      const fill = clickAndMeasure('fill');
+      const original = clickAndMeasure('original');
+      // Leave Fill active into Fullscreen test to verify persistence across fullscreen transitions.
+      const fillForFs = clickAndMeasure('fill');
+
+      return {
+        fit,
+        stretch,
+        fill,
+        original,
+        fillForFs,
+        playerClicks: window.__TEST_STATE__.playerClicks
+      };
+    })()`);
+
+    assert.equal(displayRes.fit.modeAttr, 'fit');
+    assert.equal(displayRes.fit.hasClass, true);
+    assert.equal(displayRes.fit.objectFit, 'contain');
+    assert.equal(displayRes.fit.width, '800px');
+    assert.equal(displayRes.fit.height, '450px');
+    assert.deepEqual(displayRes.fit.pressedButtons, ['fit']);
+
+    assert.equal(displayRes.stretch.modeAttr, 'stretch');
+    assert.equal(displayRes.stretch.objectFit, 'fill');
+    assert.equal(displayRes.stretch.width, '800px');
+    assert.equal(displayRes.stretch.height, '450px');
+    assert.deepEqual(displayRes.stretch.pressedButtons, ['stretch']);
+
+    assert.equal(displayRes.fill.modeAttr, 'fill');
+    assert.equal(displayRes.fill.objectFit, 'cover');
+    assert.equal(displayRes.fill.width, '800px');
+    assert.equal(displayRes.fill.height, '450px');
+    assert.deepEqual(displayRes.fill.pressedButtons, ['fill']);
+
+    assert.equal(displayRes.original.modeAttr, null);
+    assert.equal(displayRes.original.hasClass, false);
+    assert.equal(displayRes.original.inlineWidth, '640px', 'Original mode must leave YouTube native inline video sizing intact');
+    assert.equal(displayRes.original.width, '640px');
+    assert.equal(displayRes.original.height, '360px');
+    assert.deepEqual(displayRes.original.pressedButtons, ['original']);
+
+    assert.equal(displayRes.fillForFs.modeAttr, 'fill');
+    assert.equal(displayRes.playerClicks, 0, 'Display control clicks must not bubble to #movie_player');
 
     // 2. One-click speed pills, custom YouTube-exposed rate, external ratechange sync, keyboard navigation & propagation isolation
     const speedRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
@@ -681,6 +768,10 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const fsVideo = fsEl?.querySelector('video');
       host?.querySelector('#yqc-speed-row [data-yqc-rate="2"]')?.click();
       const fsRateAfterClick = fsVideo?.playbackRate;
+      const fsDisplayPressedBefore = host?.querySelector('#yqc-display-row [aria-pressed="true"]')?.dataset?.yqcDisplayMode;
+      host?.querySelector('#yqc-display-row [data-yqc-display-mode="stretch"]')?.click();
+      const fsDisplayObjectFit = fsVideo ? getComputedStyle(fsVideo).objectFit : '';
+      const fsDisplayPressedAfter = host?.querySelector('#yqc-display-row [aria-pressed="true"]')?.dataset?.yqcDisplayMode;
       host?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
       fsEl?.classList.add('ytp-autohide');
       const autohideOpacity = host ? getComputedStyle(host).opacity : '';
@@ -694,6 +785,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         fsLikeTop: Math.round(lRect?.top || 0),
         visibleWidth: Math.round(hRect?.width || 0),
         fsRateAfterClick,
+        fsDisplayPressedBefore,
+        fsDisplayObjectFit,
+        fsDisplayPressedAfter,
         autohideOpacity
       };
     })()`);
@@ -705,6 +799,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(fsDelhi.fsPlacement, 'above-like');
     assert.ok(fsDelhi.visibleWidth > 50);
     assert.equal(fsDelhi.fsRateAfterClick, 2, 'Clicking speed chip in fullscreen must immediately change video playbackRate');
+    assert.equal(fsDelhi.fsDisplayPressedBefore, 'fill', 'Active display mode must persist into fullscreen');
+    assert.equal(fsDelhi.fsDisplayObjectFit, 'fill', 'Clicking Stretch in fullscreen must apply object-fit: fill immediately');
+    assert.equal(fsDelhi.fsDisplayPressedAfter, 'stretch');
     assert.ok(fsDelhi.hostBottom <= fsDelhi.fsLikeTop + 2, `Fullscreen controls must sit directly ABOVE fullscreen Like button (${fsDelhi.hostBottom} <= ${fsDelhi.fsLikeTop})`);
     assert.equal(fsDelhi.autohideOpacity, '1', 'Hovered controls must remain visible even if .ytp-autohide toggles');
 
@@ -762,11 +859,13 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     const postFsWatch = await evalInPage(chrome.cdp, sessionId, `({
       fs: document.fullscreenElement,
       hostCount: document.querySelectorAll('#yqc-controls-host').length,
-      mode: document.getElementById('yqc-controls-host')?.dataset.yqcMode
+      mode: document.getElementById('yqc-controls-host')?.dataset.yqcMode,
+      displayActive: document.querySelector('#yqc-display-row [aria-pressed="true"]')?.dataset?.yqcDisplayMode
     })`);
     assert.equal(postFsWatch.fs, null);
     assert.equal(postFsWatch.hostCount, 1);
     assert.equal(postFsWatch.mode, 'watch');
+    assert.equal(postFsWatch.displayActive, 'stretch', 'Active display mode must remain synced after exiting fullscreen');
 
     // 4b. Normal Watch-mode Auto-Hide: ~2.5s idle fade -> #movie_player mousemove instant wake -> hover interaction hold
     const watchIdleRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
