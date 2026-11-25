@@ -1,19 +1,12 @@
 # YouTube Quick Controls
 
-A lightweight **Manifest V3 Chrome Extension** that places a compact **Star icon** directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts**. Hovering over the star smoothly reveals two compact horizontal rows of **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill controls — eliminating dropdowns and nested gear-menu clicks without cluttering the player.
+A lightweight **Manifest V3 Chrome Extension** that adds two compact horizontal rows of **Playback Speed** (`0.25x`–`3.0x`) and **Video Quality** (`Auto`, `144p`–`2160p`) pill buttons directly **above YouTube's Like button** on normal watch pages, in **fullscreen mode**, and on **YouTube Shorts** — eliminating dropdowns and nested gear-menu clicks without intercepting network streams or modifying native YouTube buttons.
 
 ---
 
 ## Features
 
-- **Compact Star Button on Right with Fixed-Right Smooth Leftward Expansion:**
-  - Displays as a compact, smaller star badge (`★`) anchored consistently to the **right edge** of its parent container directly above YouTube's action toolbar when not hovered, taking minimal space.
-  - Hovering over the Star Box smoothly elongates and expands the controls panel towards the **left** from the star to its full size and layout with a fluid `380ms cubic-bezier(0.16, 1, 0.3, 1)` transition animation.
-  - The right edge and the star icon remain fixed in exactly the same position throughout the entire animation with zero horizontal jumps or shifts.
-  - Moving the cursor between the star icon and the controls stays within the component boundary and will not trigger unwanted collapsing; leaving the component smoothly collapses it back towards the right into the star.
-  - Clicking the star toggles pinning the controls open/closed.
-  - Keyboard accessible: focuses with `Tab`, opens with `Enter` / `Space` / `ArrowLeft` / `ArrowRight`, navigates left into chips with `ArrowLeft`, wraps back to the star with `ArrowRight` from the last chip, and collapses with `Escape`.
-- **Two Compact Horizontal Rows Above the Like Button:**
+- **Directly Above the Like Button (Two Compact Horizontal Rows):** Anchors cleanly above YouTube's action bar aligned with the Like button:
   - **Row 1 – Playback Speed:** `[ 0.25x ] [ 0.5x ] [ 0.75x ] [ 1.0x ] [ 1.25x ] [ 1.5x ] [ 1.75x ] [ 2.0x ] [ 2.5x ] [ 3.0x ]`
   - **Row 2 – Video Quality:** `[ Auto ] [ 144p ] [ 240p ] [ 360p ] [ 480p ] [ 720p ] [ 1080p ] [ 1440p ] [ 2160p ]`
 - **One-Click Instant Playback Speed Control:**

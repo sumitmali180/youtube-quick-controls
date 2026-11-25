@@ -258,9 +258,6 @@
       this.idleTimer = null;
       this.idleHideDelayMs = IDLE_HIDE_DELAY_MS;
       this.isIdleHidden = false;
-      this.isRevealed = false;
-      this.isPinned = false;
-      this.collapseTimer = null;
       this.isPointerInsideHost = false;
       this.isPointerDownInsideHost = false;
       this.isKeyboardFocusedInsideHost = false;
@@ -732,31 +729,46 @@
         anchor.mode === 'fullscreen' && anchor.fsPlacement === 'classic-overlay'
       );
 
-      if (anchor.mode === 'watch') {
+      if (anchor.mode === 'watch' && anchor.likeEl) {
         host.style.left = '';
         host.style.bottom = '';
-        host.style.right = '';
-        host.style.marginInlineStart = 'auto';
-        host.style.marginInlineEnd = '0px';
+        try {
+          const likeRect = anchor.likeEl.getBoundingClientRect();
+          const parentRect = anchor.mountParent.getBoundingClientRect();
+          const hostWidth = host.getBoundingClientRect().width || host.offsetWidth || 0;
+          if (likeRect.width > 0 && parentRect.width > 0) {
+            const rawOffset = Math.max(0, Math.round(likeRect.left - parentRect.left));
+            const maxOffset =
+              hostWidth > 0 && parentRect.width > hostWidth
+                ? Math.round(parentRect.width - hostWidth)
+                : rawOffset;
+            const clampedOffset = Math.min(rawOffset, Math.max(0, maxOffset));
+            host.style.marginInlineStart =
+              clampedOffset > 0 && clampedOffset < parentRect.width ? `${clampedOffset}px` : '0px';
+          }
+        } catch {
+          host.style.marginInlineStart = '0px';
+        }
         return;
       }
 
       if (anchor.mode === 'fullscreen' && anchor.fsPlacement === 'above-like' && anchor.likeEl) {
         host.style.marginInlineStart = '';
-        host.style.marginInlineEnd = '';
         try {
           const likeRect = anchor.likeEl.getBoundingClientRect();
           const playerRect = anchor.fsPlayer.getBoundingClientRect();
+          const hostWidth = host.offsetWidth || 380;
           const hostHeight = host.offsetHeight || 56;
           if (likeRect.height > 0 && playerRect.height > 0) {
-            const rawRight = Math.max(16, Math.round(playerRect.right - likeRect.right));
+            const rawLeft = likeRect.left - playerRect.left;
+            const maxLeft = Math.max(8, playerRect.width - hostWidth - 8);
+            const clampedLeft = Math.max(8, Math.min(Math.round(rawLeft), Math.round(maxLeft)));
             const rawBottom = playerRect.bottom - likeRect.top + 8;
             const clampedBottom = Math.max(
               56,
               Math.min(Math.round(rawBottom), Math.round(playerRect.height - hostHeight - 8))
             );
-            host.style.right = `${rawRight}px`;
-            host.style.left = 'auto';
+            host.style.left = `${clampedLeft}px`;
             host.style.bottom = `${clampedBottom}px`;
           }
         } catch {
@@ -766,9 +778,7 @@
       }
 
       host.style.marginInlineStart = '';
-      host.style.marginInlineEnd = '';
       host.style.left = '';
-      host.style.right = '';
       host.style.bottom = '';
     }
 
@@ -825,42 +835,12 @@
       }
     }
 
-    clearCollapseTimer() {
-      if (this.collapseTimer) {
-        clearTimeout(this.collapseTimer);
-        this.collapseTimer = null;
-      }
-    }
-
-    setRevealed(revealed) {
-      this.isRevealed = Boolean(revealed);
-      if (!this.hostEl) return;
-      if (this.isRevealed || this.isPinned) {
-        this.hostEl.dataset.yqcRevealed = 'true';
-        this.ui?.starBtn?.setAttribute('aria-expanded', 'true');
-      } else {
-        delete this.hostEl.dataset.yqcRevealed;
-        this.ui?.starBtn?.setAttribute('aria-expanded', 'false');
-      }
-    }
-
-    scheduleCollapse(delayMs = 200) {
-      this.clearCollapseTimer();
-      this.collapseTimer = setTimeout(() => {
-        this.collapseTimer = null;
-        if (!this.isPointerInsideHost && !this.isKeyboardFocusedInsideHost && !this.isPinned) {
-          this.setRevealed(false);
-        }
-      }, delayMs);
-    }
-
     isInteractionActive() {
       return Boolean(
         this.isPointerInsideHost ||
           this.isPointerDownInsideHost ||
           this.isKeyboardFocusedInsideHost ||
           this.isQualitySwitching ||
-          this.isPinned ||
           (this.ui?.tooltip && !this.ui.tooltip.hidden)
       );
     }
@@ -1048,8 +1028,6 @@
       const handleHostEngage = () => {
         this.setIdleHidden(false);
         this.clearIdleTimer();
-        this.clearCollapseTimer();
-        this.setRevealed(true);
       };
 
       host.addEventListener(
@@ -1091,7 +1069,6 @@
           if (!this.isKeyboardFocusedInsideHost) {
             this.stopFullscreenKeepalive();
           }
-          this.scheduleCollapse(200);
           this.scheduleIdleHide();
         },
         { signal }
@@ -1146,60 +1123,11 @@
           this.isKeyboardFocusedInsideHost = false;
           if (!this.isPointerInsideHost) {
             this.stopFullscreenKeepalive();
-            this.scheduleCollapse(200);
           }
           this.scheduleIdleHide();
         },
         { signal }
       );
-
-      const starBtn = document.createElement('button');
-      starBtn.type = 'button';
-      starBtn.id = 'yqc-star-btn';
-      starBtn.className = 'yqc-star-btn';
-      starBtn.setAttribute('aria-label', 'YouTube Quick Controls');
-      starBtn.setAttribute('aria-expanded', 'false');
-      starBtn.setAttribute('aria-controls', 'yqc-controls-panel');
-      starBtn.title = 'YouTube Quick Controls (Playback speed & Video quality)';
-      starBtn.setAttribute('tabindex', '0');
-
-      const starSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      starSvg.setAttribute('class', 'yqc-star-icon');
-      starSvg.setAttribute('viewBox', '0 0 24 24');
-      starSvg.setAttribute('width', '16');
-      starSvg.setAttribute('height', '16');
-      starSvg.setAttribute('fill', 'currentColor');
-      starSvg.setAttribute('aria-hidden', 'true');
-
-      const starPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      starPath.setAttribute(
-        'd',
-        'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z'
-      );
-      starSvg.appendChild(starPath);
-      starBtn.appendChild(starSvg);
-
-      starBtn.addEventListener(
-        'click',
-        (e) => {
-          e.stopPropagation();
-          this.isPinned = !this.isPinned;
-          if (this.isPinned) {
-            host.dataset.yqcPinned = 'true';
-            this.setRevealed(true);
-          } else {
-            delete host.dataset.yqcPinned;
-            if (!this.isPointerInsideHost) {
-              this.setRevealed(false);
-            }
-          }
-        },
-        { signal }
-      );
-
-      const panel = document.createElement('div');
-      panel.id = 'yqc-controls-panel';
-      panel.className = 'yqc-panel';
 
       const speedRow = this.buildRowGroup('yqc-speed-row', 'yqc-row-speed', 'Playback speed');
       const qualityRow = this.buildRowGroup('yqc-quality-row', 'yqc-row-quality', 'Video quality');
@@ -1209,8 +1137,6 @@
       qualityStatus.setAttribute('aria-live', 'polite');
       qualityStatus.hidden = true;
       qualityRow.appendChild(qualityStatus);
-
-      panel.append(speedRow, qualityRow);
 
       const tooltip = document.createElement('div');
       tooltip.className = 'yqc-tooltip';
@@ -1224,7 +1150,7 @@
       const tooltipText = document.createElement('span');
       tooltip.append(tooltipIcon, tooltipText);
 
-      host.append(panel, starBtn, tooltip);
+      host.append(speedRow, qualityRow, tooltip);
 
       if (anchor.referenceNode && anchor.referenceNode.parentElement === anchor.mountParent) {
         anchor.mountParent.insertBefore(host, anchor.referenceNode);
@@ -1236,8 +1162,6 @@
 
       this.hostEl = host;
       this.ui = {
-        starBtn,
-        panel,
         speedRow,
         qualityRow,
         qualityStatus,
@@ -1275,20 +1199,18 @@
       if (typeof HTMLElement !== 'undefined' && 'focusGroup' in HTMLElement.prototype) {
         return;
       }
-      const star = host.querySelector('button.yqc-star-btn');
       const items = Array.from(host.querySelectorAll('button.yqc-chip'));
-      if (items.length === 0 && !star) return;
+      if (items.length === 0) return;
 
-      const allButtons = star ? [star, ...items] : items;
       const activeFocused =
         document.activeElement && host.contains(document.activeElement)
-          ? allButtons.find((el) => el === document.activeElement)
+          ? items.find((el) => el === document.activeElement)
           : null;
-      const existingStop = allButtons.find((el) => el.getAttribute('tabindex') === '0');
+      const existingStop = items.find((el) => el.getAttribute('tabindex') === '0');
       const activePressed = items.find((el) => el.getAttribute('aria-pressed') === 'true');
-      const stop = activeFocused || existingStop || star || activePressed || items[0];
+      const stop = activeFocused || existingStop || activePressed || items[0];
 
-      for (const item of allButtons) {
+      for (const item of items) {
         item.setAttribute('tabindex', item === stop ? '0' : '-1');
       }
     }
@@ -1297,9 +1219,9 @@
       host.addEventListener(
         'focusin',
         (event) => {
-          const target = event.target?.closest?.('button.yqc-chip, button.yqc-star-btn');
+          const target = event.target?.closest?.('button.yqc-chip');
           if (!target || !host.contains(target)) return;
-          for (const item of host.querySelectorAll('button.yqc-chip, button.yqc-star-btn')) {
+          for (const item of host.querySelectorAll('button.yqc-chip')) {
             item.setAttribute('tabindex', item === target ? '0' : '-1');
           }
         },
@@ -1309,53 +1231,10 @@
       host.addEventListener(
         'keydown',
         (event) => {
-          const target = event.target?.closest?.('button.yqc-chip, button.yqc-star-btn');
+          const target = event.target?.closest?.('button.yqc-chip');
           if (!target || !host.contains(target)) return;
 
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            this.isPinned = false;
-            delete host.dataset.yqcPinned;
-            this.setRevealed(false);
-            this.ui?.starBtn?.focus();
-            return;
-          }
-
-          const isStar = target.classList.contains('yqc-star-btn');
-          const chips = Array.from(host.querySelectorAll('button.yqc-chip'));
-          if (isStar) {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              event.stopPropagation();
-              this.isPinned = !this.isPinned;
-              if (this.isPinned) {
-                host.dataset.yqcPinned = 'true';
-                this.setRevealed(true);
-              } else {
-                delete host.dataset.yqcPinned;
-                this.setRevealed(false);
-              }
-              return;
-            }
-            if (
-              (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowDown') &&
-              chips.length > 0
-            ) {
-              event.preventDefault();
-              event.stopPropagation();
-              this.setRevealed(true);
-              const targetChip = event.key === 'ArrowLeft' ? chips[chips.length - 1] : chips[0];
-              for (const item of host.querySelectorAll('button.yqc-chip, button.yqc-star-btn')) {
-                item.setAttribute('tabindex', item === targetChip ? '0' : '-1');
-              }
-              targetChip.focus();
-              return;
-            }
-            return;
-          }
-
-          const items = chips;
+          const items = Array.from(host.querySelectorAll('button.yqc-chip'));
           if (items.length === 0) return;
 
           let isRtl = false;
@@ -1371,18 +1250,10 @@
           let nextTarget = null;
 
           if (event.key === nextKey) {
-            if (currentIndex === items.length - 1 && this.ui?.starBtn) {
-              nextTarget = this.ui.starBtn;
-            } else {
-              nextTarget = items[currentIndex < 0 ? 0 : (currentIndex + 1) % items.length];
-            }
+            nextTarget = items[currentIndex < 0 ? 0 : (currentIndex + 1) % items.length];
           } else if (event.key === prevKey) {
-            if (currentIndex === 0 && this.ui?.starBtn) {
-              nextTarget = this.ui.starBtn;
-            } else {
-              nextTarget =
-                items[currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length];
-            }
+            nextTarget =
+              items[currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length];
           } else if (event.key === 'Home') {
             nextTarget = items[0];
           } else if (event.key === 'End') {
@@ -1406,7 +1277,7 @@
           if (nextTarget) {
             event.preventDefault();
             event.stopPropagation();
-            for (const item of host.querySelectorAll('button.yqc-chip, button.yqc-star-btn')) {
+            for (const item of items) {
               item.setAttribute('tabindex', item === nextTarget ? '0' : '-1');
             }
             nextTarget.focus();
@@ -1851,9 +1722,6 @@
       this.isPointerDownInsideHost = false;
       this.isKeyboardFocusedInsideHost = false;
       this.isIdleHidden = false;
-      this.isRevealed = false;
-      this.isPinned = false;
-      this.clearCollapseTimer();
       this.clearIdleTimer();
       this.stopFullscreenKeepalive();
       this.clearQualityTimers();
