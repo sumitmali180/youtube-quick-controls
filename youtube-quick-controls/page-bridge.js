@@ -470,7 +470,7 @@
           sawRateOrQualityEvent &&
           sawEventQuality &&
           sawEventQuality !== requestedQuality &&
-          Date.now() - started >= 150
+          Date.now() - started >= 900
         ) {
           break;
         }

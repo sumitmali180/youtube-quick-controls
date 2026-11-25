@@ -908,6 +908,75 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(spaThemeRes.shorts2Result.hostCount, 1);
     assert.equal(spaThemeRes.homeHostCount, 0, 'Home feed must clean up controls cleanly');
 
+    // 5b. Default 4K (hd2160) auto-apply: immediate settings update + late DASH manifest upgrade + SPA watch navigation
+    const auto4kRes = await evalInPage(chrome.cdp, sessionId, `(async () => {
+      document.getElementById('watch-stage').style.display = 'block';
+      document.getElementById('shorts-stage').style.display = 'none';
+
+      // Start on watch video vidB with only hd720/large initially available and Auto selected
+      window.__TEST_STATE__.videoId = 'vidB';
+      window.__TEST_STATE__.levels = ['hd720', 'large', 'auto'];
+      window.__TEST_STATE__.data = [
+        { quality: 'hd720', qualityLabel: '720p', isPlayable: true },
+        { quality: 'large', qualityLabel: '480p', isPlayable: true },
+        { quality: 'auto', qualityLabel: 'Auto', isPlayable: true }
+      ];
+      window.__TEST_STATE__.currentQuality = 'hd720';
+      window.__TEST_STATE__.preferredQuality = 'auto';
+
+      window.dispatchEvent(new Event('yt-navigate-start'));
+      history.pushState({}, '', '/watch?v=vidB');
+      window.dispatchEvent(new Event('yt-navigate-finish'));
+      await new Promise(r => setTimeout(r, 180));
+
+      // User changes Default Video Quality to 2160p (4K) in popup while watching vidB
+      await chrome.storage.sync.set({ enabled: true, defaultSpeed: 1.0, defaultQuality: 'hd2160', autoApply: true });
+      await new Promise(r => setTimeout(r, 250));
+      const initialAppliedOnVidB = window.__TEST_STATE__.preferredQuality;
+
+      // DASH manifest finishes loading 4K (hd2160) and player emits onStateChange
+      window.__TEST_STATE__.levels = ['hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'auto'];
+      window.__TEST_STATE__.data = [
+        { quality: 'hd2160', qualityLabel: '2160p', isPlayable: true },
+        { quality: 'hd1440', qualityLabel: '1440p', isPlayable: true },
+        { quality: 'hd1080', qualityLabel: '1080p', isPlayable: true },
+        { quality: 'hd720', qualityLabel: '720p', isPlayable: true },
+        { quality: 'large', qualityLabel: '480p', isPlayable: true },
+        { quality: 'auto', qualityLabel: 'Auto', isPlayable: true }
+      ];
+      (window.__TEST_STATE__.listeners.onStateChange || []).forEach(fn => fn(1));
+      await new Promise(r => setTimeout(r, 300));
+      const upgraded4kOnVidB = {
+        preferred: window.__TEST_STATE__.preferredQuality,
+        current: window.__TEST_STATE__.currentQuality,
+        activeChip: document.querySelector('#yqc-quality-row [aria-pressed="true"]')?.dataset?.yqcQuality
+      };
+
+      // Navigate to a new video vidC that starts in Auto with 4K available
+      window.dispatchEvent(new Event('yt-navigate-start'));
+      window.__TEST_STATE__.videoId = 'vidC';
+      window.__TEST_STATE__.currentQuality = 'hd1080';
+      window.__TEST_STATE__.preferredQuality = 'auto';
+      history.pushState({}, '', '/watch?v=vidC');
+      window.dispatchEvent(new Event('yt-navigate-finish'));
+      await new Promise(r => setTimeout(r, 300));
+      const auto4kOnVidC = {
+        preferred: window.__TEST_STATE__.preferredQuality,
+        current: window.__TEST_STATE__.currentQuality,
+        activeChip: document.querySelector('#yqc-quality-row [aria-pressed="true"]')?.dataset?.yqcQuality
+      };
+
+      return { initialAppliedOnVidB, upgraded4kOnVidB, auto4kOnVidC };
+    })()`);
+
+    assert.equal(auto4kRes.initialAppliedOnVidB, 'hd720', 'Should lock highest available quality (720p) before 4K manifest loads');
+    assert.equal(auto4kRes.upgraded4kOnVidB.preferred, 'hd2160', 'Should automatically upgrade to 4K (hd2160) once 4K manifest loads');
+    assert.equal(auto4kRes.upgraded4kOnVidB.current, 'hd2160');
+    assert.equal(auto4kRes.upgraded4kOnVidB.activeChip, 'hd2160');
+    assert.equal(auto4kRes.auto4kOnVidC.preferred, 'hd2160', 'New video navigation must automatically play in 4K (hd2160)');
+    assert.equal(auto4kRes.auto4kOnVidC.current, 'hd2160');
+    assert.equal(auto4kRes.auto4kOnVidC.activeChip, 'hd2160');
+
     // 6. Real Popup UI test inside Chrome 156 with pre-injected chrome.storage before popup.js executes
     const popupTarget = await chrome.cdp.send('Target.createTarget', { url: 'about:blank' });
     const { sessionId: popupSession } = await chrome.cdp.send('Target.attachToTarget', {
