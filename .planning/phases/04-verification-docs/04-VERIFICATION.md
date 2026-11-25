@@ -35,3 +35,4 @@ score: 30/30 requirements verified
 
 - Real Google Chrome 156 (`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`) executed actual Blink layout, CSS custom properties, Top-Layer `requestFullscreen()`, `Popover` / `commandfor` / `focusgroup`, `MutationObserver`, `ResizeObserver`, and `popup.html` execution against local HTTP harnesses.
 - **Not tested automatically:** Unpacked CLI loading via `--load-extension` (ignored by branded Google Chrome 156 stable) and live `https://www.youtube.com` pages (manual verification via `chrome://extensions/` -> **Load unpacked** is documented in `youtube-quick-controls/README.md`).
+

@@ -32,3 +32,4 @@ files_modified:
 - `node --test tests/*.test.mjs`: 6/6 tests passed (unit + bridge + Chrome 156 Watch/Fullscreen/Star-Collapse/Shorts/SPA/Theme/Popup E2E + Brave 157 unpacked `--load-extension` test).
 - `node --check youtube-quick-controls/*.js`: passed.
 - `! grep -rnE "TODO|FIXME" youtube-quick-controls/`: zero markers.
+

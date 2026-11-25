@@ -21,3 +21,4 @@ Reorder the star button to sit on the right side of the YouTube Quick Controls c
 4. **Tests & Verification**:
    - Verify `tests/unit-manifest-bridge.test.mjs` invariants.
    - Verify `tests/e2e-chrome-dom.test.mjs` against real Chrome 156 with CDP.
+

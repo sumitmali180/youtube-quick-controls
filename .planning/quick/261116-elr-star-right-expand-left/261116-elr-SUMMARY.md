@@ -35,3 +35,4 @@ files_modified:
 - `node --check youtube-quick-controls/*.js`: syntax check passed with 0 errors.
 - `node --test tests/*.test.mjs`: all 6/6 test suites passed cleanly (Brave unpacked MV3 persistence, Chrome 156 Watch/Fullscreen/Star/Shorts/SPA/Theme E2E, Unit Manifest & Security invariants, background SW, page bridge).
 - Zero `TODO` or `FIXME` comments.
+

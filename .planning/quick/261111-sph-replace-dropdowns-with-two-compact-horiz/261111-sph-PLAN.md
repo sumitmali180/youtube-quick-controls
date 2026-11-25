@@ -29,3 +29,4 @@ Replace dropdown trigger buttons and popover menus with two permanently visible,
    - Use `role="toolbar"` with `focusgroup="toolbar wrap"`, grouped `role="group"` rows, `<button type="button">` pills (`>= 24x24` CSS px hit targets via `min-inline-size` / `min-block-size`), JS roving-tabindex fallback when `!('focusGroup' in HTMLElement.prototype)`, YouTube Light/Dark adaptive high-contrast active tokens, `@media (hover: hover)`, `@media (prefers-reduced-motion: no-preference)`, and `@media (forced-colors: active)`.
 4. **Verification:**
    - Update `tests/unit-manifest-bridge.test.mjs` and `tests/e2e-chrome-dom.test.mjs` for the inline two-row UI and run `node --test tests/*.test.mjs` plus Brave 157 `--load-extension` live MV3 verification.
+

@@ -28,3 +28,4 @@ All scenarios below executed and passed in `node --test tests/*.test.mjs` after 
 1. Open `chrome://extensions/`, enable **Developer mode**, click **Load unpacked**, and select `youtube-quick-controls/`.
 2. Open a standard 1080p/4K video on `https://www.youtube.com/watch?...`, confirm `[ 1.0x ▼ ] [ Auto (...) ▼ ]` sits cleanly above Like, test Light & Dark theme appearance, and enter/exit Fullscreen.
 3. Navigate via video cards, search results, Shorts feed, and Back/Forward to confirm single-bar anchoring and saved popup defaults.
+
