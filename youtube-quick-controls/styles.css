@@ -75,22 +75,31 @@ ytd-app[dark] .yqc-root,
 
 .yqc-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   max-inline-size: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
   box-sizing: border-box;
+}
+
+.yqc-row::-webkit-scrollbar {
+  display: none;
 }
 
 .yqc-chip {
   appearance: none;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-inline-size: 24px;
   min-block-size: 24px;
   padding-block: 2px;
-  padding-inline: 7px;
+  padding-inline: 6px;
   margin: 0;
   border: 1px solid var(--yqc-border);
   border-radius: 999px;
@@ -247,6 +256,8 @@ video.yqc-video-display[data-yqc-display='fill'] {
   position: absolute;
   inset-inline-start: 12px;
   inset-block-end: 64px;
+  inline-size: max-content;
+  max-inline-size: calc(100% - 16px);
   z-index: 75;
 }
 
@@ -254,6 +265,8 @@ video.yqc-video-display[data-yqc-display='fill'] {
   position: absolute;
   inset-inline-end: 16px;
   inset-block-end: 64px;
+  inline-size: max-content;
+  max-inline-size: calc(100% - 32px);
   z-index: 75;
 }
 

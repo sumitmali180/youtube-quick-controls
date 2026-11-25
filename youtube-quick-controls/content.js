@@ -792,7 +792,7 @@
             const maxOffset =
               hostWidth > 0 && parentRect.width > hostWidth
                 ? Math.round(parentRect.width - hostWidth)
-                : rawOffset;
+                : 0;
             const clampedOffset = Math.min(rawOffset, Math.max(0, maxOffset));
             host.style.marginInlineStart =
               clampedOffset > 0 && clampedOffset < parentRect.width ? `${clampedOffset}px` : '0px';

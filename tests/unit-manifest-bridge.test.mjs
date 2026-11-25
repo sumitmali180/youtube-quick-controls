@@ -75,6 +75,7 @@ test('Static MV3 security, CSP, and Modern Web Guidance CSS invariants hold', ()
 
   const stylesCss = readExtFile('styles.css');
   assert.match(stylesCss, /\.yqc-row\b/, 'styles.css must style compact .yqc-row containers');
+  assert.match(stylesCss, /\.yqc-row\s*\{[^}]*flex-wrap:\s*nowrap/s, '.yqc-row must enforce single-row nowrap layout');
   assert.match(stylesCss, /\.yqc-chip\[aria-pressed='true'\]/, 'styles.css must style active state directly from [aria-pressed="true"]');
   assert.match(stylesCss, /\.yqc-chip\[aria-disabled='true'\]/, 'styles.css must style disabled state directly from [aria-disabled="true"]');
   assert.match(stylesCss, /:focus-visible/, 'styles.css must define :focus-visible styles');

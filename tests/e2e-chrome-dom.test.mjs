@@ -463,6 +463,10 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       const dRect = displayBtns[0].getBoundingClientRect();
       const sRect = speedBtns[0].getBoundingClientRect();
       const qRect = qualityBtns[0].getBoundingClientRect();
+      const rowTopSpread = (btns) => {
+        const tops = btns.map(b => Math.round(b.getBoundingClientRect().top));
+        return Math.max(...tops) - Math.min(...tops);
+      };
       likeBtn.click();
       return {
         hostCount: hosts.length,
@@ -478,6 +482,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         speedRowTop: Math.round(sRowRect.top),
         speedRowBottom: Math.round(sRowRect.bottom),
         qualityRowTop: Math.round(qRowRect.top),
+        displaySpread: rowTopSpread(displayBtns),
+        speedSpread: rowTopSpread(speedBtns),
+        qualitySpread: rowTopSpread(qualityBtns),
         hostLeft: Math.round(hRect.left),
         likeLeft: Math.round(lRect.left),
         displayLabels: displayBtns.map(b => b.textContent.trim()),
@@ -503,6 +510,9 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(watchLayout.qualityGroupRole, 'group');
     assert.ok(watchLayout.displayRowBottom <= watchLayout.speedRowTop + 2, 'Display pills must sit directly above Speed pills');
     assert.ok(watchLayout.speedRowBottom <= watchLayout.qualityRowTop + 2, 'Row 1 speed pills must sit directly above Row 2 quality pills');
+    assert.ok(watchLayout.displaySpread <= 2, `Display row must stay on one single line (spread=${watchLayout.displaySpread})`);
+    assert.ok(watchLayout.speedSpread <= 2, `Speed row must stay on one single line (spread=${watchLayout.speedSpread})`);
+    assert.ok(watchLayout.qualitySpread <= 2, `Quality row must stay on one single line (spread=${watchLayout.qualitySpread})`);
     assert.ok(watchLayout.hostBottom <= watchLayout.likeTop + 1, `Controls must render ABOVE Like button (${watchLayout.hostBottom} <= ${watchLayout.likeTop})`);
     assert.ok(Math.abs(watchLayout.hostLeft - watchLayout.likeLeft) <= 10, 'Controls must align with Like button left edge');
     assert.ok(watchLayout.displayDims[0] >= 24 && watchLayout.displayDims[1] >= 24);
@@ -775,6 +785,15 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
       host?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
       fsEl?.classList.add('ytp-autohide');
       const autohideOpacity = host ? getComputedStyle(host).opacity : '';
+      const rowMetrics = Array.from(host?.querySelectorAll('.yqc-row') || []).map((row) => {
+        const btns = Array.from(row.querySelectorAll('button.yqc-chip'));
+        const tops = btns.map((b) => Math.round(b.getBoundingClientRect().top));
+        return {
+          id: row.id,
+          spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0,
+          overflowX: row.scrollWidth - row.clientWidth
+        };
+      });
       return {
         isFullscreen: Boolean(fsEl),
         insideTopLayer: Boolean(fsEl && host && fsEl.contains(host)),
@@ -788,6 +807,7 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
         fsDisplayPressedBefore,
         fsDisplayObjectFit,
         fsDisplayPressedAfter,
+        rowMetrics,
         autohideOpacity
       };
     })()`);
@@ -798,6 +818,10 @@ test('Real Chrome 156 E2E: Watch placement, Speed/Quality sync + rollback, Fulls
     assert.equal(fsDelhi.mode, 'fullscreen');
     assert.equal(fsDelhi.fsPlacement, 'above-like');
     assert.ok(fsDelhi.visibleWidth > 50);
+    for (const rm of fsDelhi.rowMetrics) {
+      assert.ok(rm.spread <= 2, `Fullscreen row ${rm.id} must occupy a single line (spread=${rm.spread})`);
+      assert.ok(rm.overflowX <= 1, `Fullscreen row ${rm.id} must fit without horizontal clipping (overflow=${rm.overflowX})`);
+    }
     assert.equal(fsDelhi.fsRateAfterClick, 2, 'Clicking speed chip in fullscreen must immediately change video playbackRate');
     assert.equal(fsDelhi.fsDisplayPressedBefore, 'fill', 'Active display mode must persist into fullscreen');
     assert.equal(fsDelhi.fsDisplayObjectFit, 'fill', 'Clicking Stretch in fullscreen must apply object-fit: fill immediately');
